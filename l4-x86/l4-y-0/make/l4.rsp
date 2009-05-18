@@ -1,0 +1,2 @@
+kernel startpc  start   cpuctr  ipcman dispatch intctr tcbman memctr sgmctr+
+pagctr pagfault pagmap adrsman emuctr  yoonseva kdiopc kdebug sigma0 ktest,l4.exe,l4.map;

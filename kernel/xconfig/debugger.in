@@ -1,0 +1,68 @@
+######################################################################
+##                
+## Copyright (C) 1999, 2000, 2001,  Karlsruhe University
+##                
+## File path:     debugger.in
+## Description:   Configuration for various debug options.
+##                
+## @LICENSE@
+##                
+## $Id: debugger.in,v 1.22 2001/12/13 03:21:14 ud3 Exp $
+##                
+######################################################################
+
+mainmenu_option next_comment
+comment 'Debug Configuration'
+
+# these two are mutually exclusive
+if [ "$CONFIG_DEBUGGER_GDB" != "y" ]; then
+bool 'L4/KA Kernel Debugger' CONFIG_DEBUGGER_KDB y
+fi
+
+if [ "$CONFIG_DEBUGGER_KDB" != "y" ]; then
+bool 'Remote GDB Debugger' CONFIG_DEBUGGER_GDB n
+fi
+
+if [ "$CONFIG_DEBUGGER_KDB" != "y" ]
+  define_bool _HAVE_KDB n
+else
+  bool 'Use new KDB'  CONFIG_DEBUGGER_NEW_KDB n
+  define_bool _HAVE_KDB y
+  choice 'debugger input device' \
+       "kbd	CONFIG_DEBUGGER_IO_INKBD	\
+	serial	CONFIG_DEBUGGER_IO_INCOM" serial $_HAVE_KDB
+  choice 'debugger output device' \
+       "screen	CONFIG_DEBUGGER_IO_OUTSCRN	\
+	serial	CONFIG_DEBUGGER_IO_OUTCOM" serial $_HAVE_KDB
+fi
+
+if [ "$CONFIG_DEBUGGER_KDB" = "y" -a "$CONFIG_DEBUGGER_IO_INCOM" = "y" -o "$CONFIG_DEBUGGER_KDB" = "y" -a "$CONFIG_DEBUGGER_IO_OUTCOM" = "y" -o "$CONFIG_DEBUGGER_GDB" = "y" ]
+  hex 'Serial port address' CONFIG_DEBUGGER_COMPORT 3F8
+  int 'Serial port speed' CONFIG_DEBUGGER_COMSPEED 115200
+fi
+
+if [ "$CONFIG_DEBUGGER_IO_OUTSCRN" = "y" -a "$CONFIG_ARCH_X86" = "y" ]
+  choice 'debugger output screen type' \
+	"vga		CONFIG_DEBUGGER_IO_SCREEN_VGA \
+	 hercules	CONFIG_DEBUGGER_IO_SCREEN_HERCULES" hercules 
+fi
+
+if [ "$CONFIG_DEBUGGER_KDB" = "y" ]
+  bool 'Enable disassembler' CONFIG_DEBUG_DISAS n
+  if [ "$CONFIG_ARCH_X86" = "y" ]
+    bool 'Keep last branches' CONFIG_KEEP_LAST_BRANCHES n
+  fi
+fi
+
+bool 'Disable INTs in user mode' CONFIG_USERMODE_NOIRQ n
+
+bool 'Enable debugging' CONFIG_DEBUG y
+
+if [ "$CONFIG_DEBUG" = "y" ]
+  bool 'Double pagefault check' CONFIG_DEBUG_DOUBLE_PF_CHECK n
+  bool 'Remote enter-KDB' CONFIG_DEBUG_BREAKIN n
+  bool 'Enter KDB on start' CONFIG_DEBUG_KDB_ONSTART n
+fi
+bool 'Enable Sanity checks' CONFIG_DEBUG_SANITY n
+
+endmenu

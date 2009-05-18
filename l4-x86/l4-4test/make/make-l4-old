@@ -1,0 +1,371 @@
+
+p={\l4-30\src\kernel\;\l4-30\src\kernifc\;\l4-30\src\userifc\}
+b=\l4-30\bin-486^\
+c=\l4-30\bin-pent^\
+d=\l4-30\bin-pex2^\
+e=\l4-30\bin-k6^\
+all_includes_486= $(p)l4pre.inc $(p)l4const.inc $(p)l4kd.inc $(p)adrspace.inc $(p)adrspac4.inc $(p)tcb.inc $(p)cpucb.inc $(p)cpucb4.inc $(p)intrifc.inc $(p)pagcb.inc $(p)pagconst.inc $(p)pagmac.inc $(p)pnodes.inc $(p)schedcb.inc $(p)schedcb2.inc $(p)lbmac.inc $(p)syscalls.inc $(p)uid.inc $(p)kpage.inc $(p)msg.inc $(p)msgmac.inc
+all_includes_pent= $(p)l4pre.inc $(p)l4const.inc $(p)l4kd.inc $(p)adrspace.inc $(p)adrspac5.inc $(p)tcb.inc $(p)cpucb.inc $(p)cpucb5.inc $(p)intrifc.inc $(p)pagcb.inc $(p)pagconst.inc $(p)pagmac.inc $(p)pnodes.inc $(p)schedcb.inc $(p)schedcb2.inc $(p)lbmac.inc $(p)syscalls.inc $(p)uid.inc $(p)kpage.inc $(p)msg.inc $(p)msgmac.inc $(p)small-as.inc $(p)apic.inc
+all_includes_k6= $(p)l4pre.inc $(p)l4const.inc $(p)l4kd.inc $(p)adrspace.inc $(p)adrspac5.inc $(p)tcb.inc $(p)cpucb.inc $(p)cpucb5.inc $(p)intrifc.inc $(p)pagcb.inc $(p)pagconst.inc $(p)pagmac.inc $(p)pnodes.inc $(p)schedcb.inc $(p)schedcb2.inc $(p)lbmac.inc $(p)syscalls.inc $(p)uid.inc $(p)kpage.inc $(p)msg.inc $(p)msgmac.inc $(p)small-as.inc $(p)apic.inc
+
+$(b)adrsman4.obj : $(all_includes_486) $(p)adrsman4.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-486 adrsman4 asm
+  
+$(b)cpuctr4.obj : $(all_includes_486) $(p)cpuctr4.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-486 cpuctr4 asm
+  
+$(b)dispatch.obj : $(all_includes_486) $(p)dispatch.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-486 dispatch asm
+ 
+$(b)emuctr.obj : $(all_includes_486) $(p)emuctr.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-486 emuctr asm
+ 
+$(b)intctr.obj : $(all_includes_486) $(p)intctr.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-486 intctr asm
+ 
+$(b)ipcman4.obj : $(all_includes_486) $(p)ipcman4.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-486 ipcman4 asm
+ 
+$(b)kdebug.obj : $(all_includes_486) $(p)kdebug.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-486 kdebug asm           
+ 
+$(b)kdiopc.obj : $(all_includes_486) $(p)kdiopc.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-486 kdiopc asm
+ 
+$(b)kernel4.obj : $(p)kernel4.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-486 kernel4 asm
+ 
+$(b)ktest4.obj : $(all_includes_486) $(p)ktest4.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-486 ktest4 asm
+ 
+$(b)memctr.obj : $(all_includes_486) $(p)memctr.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-486 memctr asm
+ 
+$(b)pagctr4.obj : $(all_includes_486) $(p)pagctr4.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-486 pagctr4 asm
+  
+$(b)pagfault.obj : $(all_includes_486) $(p)pagfault.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-486 pagfault asm
+ 
+$(b)pagmap4.obj : $(all_includes_486) $(p)pagmap4.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-486 pagmap4 asm
+ 
+$(b)sgmctr.obj : $(all_includes_486) $(p)sgmctr.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-486 sgmctr asm
+ 
+$(b)sigma0.obj : $(all_includes_486) $(p)sigma0.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-486 sigma0 asm
+ 
+$(b)start.obj : $(all_includes_486) $(p)start.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-486 start asm
+ 
+$(b)startpc.obj : $(all_includes_486) $(p)startpc.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-486 startpc asm
+ 
+$(b)tcbman.obj : $(all_includes_486) $(p)tcbman.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-486 tcbman asm 
+ 
+ 
+$(b)l4.exe : $(b)adrsman4.obj $(b)cpuctr4.obj $(b)dispatch.obj $(b)emuctr.obj
+$(b)l4.exe : $(b)intctr.obj $(b)ipcman4.obj $(b)kdebug.obj $(b)kdiopc.obj
+$(b)l4.exe : $(b)kernel4.obj $(b)ktest4.obj $(b)memctr.obj $(b)pagctr4.obj
+$(b)l4.exe : $(b)pagfault.obj $(b)pagmap4.obj $(b)sgmctr.obj $(b)sigma0.obj
+$(b)l4.exe : $(b)start.obj $(b)startpc.obj $(b)tcbman.obj
+ cd \l4-30\bin-486
+ link @ln4.rsp
+ pause
+ 
+ 
+
+$(c)adrsman5.obj : $(all_includes_pent) $(p)adrsman5.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pent adrsman5 as5
+  
+$(c)cpuctr5.obj : $(all_includes_pent) $(p)cpuctr5.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pent cpuctr5 as5
+  
+$(c)dispatch.obj : $(all_includes_pent) $(p)dispatch.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pent dispatch asm
+ 
+$(c)emuctr.obj : $(all_includes_pent) $(p)emuctr.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pent emuctr asm
+ 
+$(c)intctr.obj : $(all_includes_pent) $(p)intctr.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pent intctr asm
+ 
+$(c)ipcman5.obj : $(all_includes_pent) $(p)ipcman5.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pent ipcman5 as5
+ 
+$(c)kdebug.obj : $(all_includes_pent) $(p)kdebug.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pent kdebug asm           
+ 
+$(c)kdiopc.obj : $(all_includes_pent) $(p)kdiopc.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pent kdiopc asm
+ 
+$(c)kernel5.obj : $(p)kernel5.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pent kernel5 as5
+ 
+$(c)ktest5.obj : $(all_includes_pent) $(p)ktest5.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pent ktest5 as5
+ 
+$(c)memctr.obj : $(all_includes_pent) $(p)memctr.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pent memctr asm
+ 
+$(c)pagctr5.obj : $(all_includes_pent) $(p)pagctr5.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pent pagctr5 as5
+  
+$(c)pagfault.obj : $(all_includes_pent) $(p)pagfault.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pent pagfault asm
+ 
+$(c)pagmap5.obj : $(all_includes_pent) $(p)pagmap5.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pent pagmap5 as5
+ 
+$(c)sgmctr.obj : $(all_includes_pent) $(p)sgmctr.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pent sgmctr asm
+ 
+$(c)sigma0.obj : $(all_includes_pent) $(p)sigma0.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pent sigma0 asm
+ 
+$(c)start.obj : $(all_includes_pent) $(p)start.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pent start asm
+ 
+$(c)startpc.obj : $(all_includes_pent) $(p)startpc.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pent startpc asm
+ 
+$(c)tcbman.obj : $(all_includes_pent) $(p)tcbman.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pent tcbman asm 
+ 
+ 
+$(c)l4.exe : $(c)adrsman5.obj $(c)cpuctr5.obj $(c)dispatch.obj $(c)emuctr.obj
+$(c)l4.exe : $(c)intctr.obj $(c)ipcman5.obj $(c)kdebug.obj $(c)kdiopc.obj
+$(c)l4.exe : $(c)kernel5.obj $(c)ktest5.obj $(c)memctr.obj $(c)pagctr5.obj
+$(c)l4.exe : $(c)pagfault.obj $(c)pagmap5.obj $(c)sgmctr.obj $(c)sigma0.obj
+$(c)l4.exe : $(c)start.obj $(c)startpc.obj $(c)tcbman.obj
+ cd \l4-30\bin-pent
+ link @ln4.rsp
+ pause
+ 
+
+
+ 
+
+$(d)adrsman5.obj : $(all_includes_pent) $(p)adrsman5.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 adrsman5 as5
+  
+$(d)cpuctr5.obj : $(all_includes_pent) $(p)cpuctr5.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 cpuctr5 as5
+  
+$(d)dispatch.obj : $(all_includes_pent) $(p)dispatch.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 dispatch asm
+ 
+$(d)emuctr.obj : $(all_includes_pent) $(p)emuctr.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 emuctr asm
+ 
+$(d)intctr.obj : $(all_includes_pent) $(p)intctr.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 intctr asm
+ 
+$(d)ipcman5.obj : $(all_includes_pent) $(p)ipcman5.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 ipcman5 as5
+ 
+$(d)kdebug.obj : $(all_includes_pent) $(p)kdebug.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 kdebug asm           
+ 
+$(d)kdiopc.obj : $(all_includes_pent) $(p)kdiopc.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 kdiopc asm
+ 
+$(d)kernel5.obj : $(p)kernel5.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 kernel5 as5
+ 
+$(d)ktest5.obj : $(all_includes_pent) $(p)ktest5.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 ktest5 as5
+ 
+$(d)memctr.obj : $(all_includes_pent) $(p)memctr.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 memctr asm
+ 
+$(d)pagctr5.obj : $(all_includes_pent) $(p)pagctr5.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 pagctr5 as5
+  
+$(d)pagfault.obj : $(all_includes_pent) $(p)pagfault.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 pagfault asm
+ 
+$(d)pagmap5.obj : $(all_includes_pent) $(p)pagmap5.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 pagmap5 as5
+ 
+$(d)sgmctr.obj : $(all_includes_pent) $(p)sgmctr.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 sgmctr asm
+ 
+$(d)sigma0.obj : $(all_includes_pent) $(p)sigma0.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 sigma0 asm
+ 
+$(d)start.obj : $(all_includes_pent) $(p)start.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 start asm
+
+$(d)x2ctr.obj : $(all_includes_pent) $(p)x2ctr.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 x2ctr as5
+ 
+ 
+$(d)startpc.obj : $(all_includes_pent) $(p)startpc.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 startpc asm
+ 
+$(d)tcbman.obj : $(all_includes_pent) $(p)tcbman.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-pex2 tcbman asm 
+ 
+ 
+$(d)l4.exe : $(d)adrsman5.obj $(d)cpuctr5.obj $(d)dispatch.obj $(d)emuctr.obj
+$(d)l4.exe : $(d)intctr.obj $(d)ipcman5.obj $(d)kdebug.obj $(d)kdiopc.obj
+$(d)l4.exe : $(d)kernel5.obj $(d)ktest5.obj $(d)memctr.obj $(d)pagctr5.obj
+$(d)l4.exe : $(d)pagfault.obj $(d)pagmap5.obj $(d)sgmctr.obj $(d)sigma0.obj
+$(d)l4.exe : $(d)start.obj $(d)startpc.obj $(d)tcbman.obj
+$(d)l4.exe : $(d)x2ctr.obj
+ cd \l4-30\bin-pex2
+ link @ln4.rsp
+ pause
+ 
+
+
+
+$(e)adrsman5.obj : $(all_includes_k6) $(p)adrsman5.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-k6 adrsman5 as5
+  
+$(e)cpuctr5.obj : $(all_includes_k6) $(p)cpuctr5.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-k6 cpuctr5 as5
+  
+$(e)dispatch.obj : $(all_includes_k6) $(p)dispatch.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-k6 dispatch asm
+ 
+$(e)emuctr.obj : $(all_includes_k6) $(p)emuctr.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-k6 emuctr asm
+ 
+$(e)intctr.obj : $(all_includes_k6) $(p)intctr.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-k6 intctr asm
+ 
+$(e)ipcmank6.obj : $(all_includes_k6) $(p)ipcmank6.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-k6 ipcmank6 as5
+ 
+$(e)kdebug.obj : $(all_includes_k6) $(p)kdebug.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-k6 kdebug asm           
+ 
+$(e)kdiopc.obj : $(all_includes_k6) $(p)kdiopc.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-k6 kdiopc asm
+ 
+$(e)kernelk6.obj : $(p)kernelk6.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-k6 kernelk6 as5
+ 
+$(e)ktestk6.obj : $(all_includes_k6) $(p)ktestk6.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-k6 ktestk6 as5
+ 
+$(e)memctr.obj : $(all_includes_k6) $(p)memctr.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-k6 memctr asm
+ 
+$(e)pagctr5.obj : $(all_includes_k6) $(p)pagctr5.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-k6 pagctr5 as5
+  
+$(e)pagfault.obj : $(all_includes_k6) $(p)pagfault.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-k6 pagfault asm
+ 
+$(e)pagmap5.obj : $(all_includes_k6) $(p)pagmap5.as5
+  cd \l4-30\src\kernel
+  ..\..\make\xml-k6 pagmap5 as5
+ 
+$(e)sgmctr.obj : $(all_includes_k6) $(p)sgmctr.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-k6 sgmctr asm
+ 
+$(e)sigma0.obj : $(all_includes_k6) $(p)sigma0.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-k6 sigma0 asm
+ 
+$(e)start.obj : $(all_includes_k6) $(p)start.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-k6 start asm
+ 
+$(e)startpc.obj : $(all_includes_k6) $(p)startpc.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-k6 startpc asm
+ 
+$(e)tcbman.obj : $(all_includes_k6) $(p)tcbman.asm
+  cd \l4-30\src\kernel
+  ..\..\make\xml-k6 tcbman asm 
+ 
+ 
+$(e)l4.exe : $(e)adrsman5.obj $(e)cpuctr5.obj $(e)dispatch.obj $(e)emuctr.obj
+$(e)l4.exe : $(e)intctr.obj $(e)ipcmank6.obj $(e)kdebug.obj $(e)kdiopc.obj
+$(e)l4.exe : $(e)kernelk6.obj $(e)ktestk6.obj $(e)memctr.obj $(e)pagctr5.obj
+$(e)l4.exe : $(e)pagfault.obj $(e)pagmap5.obj $(e)sgmctr.obj $(e)sigma0.obj
+$(e)l4.exe : $(e)start.obj $(e)startpc.obj $(e)tcbman.obj
+ cd \l4-30\bin-k6
+ link @ln4.rsp
+ pause
+ 
+
+

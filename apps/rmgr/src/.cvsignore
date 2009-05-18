@@ -1,0 +1,3 @@
+*.i *.s
+cfg-parse.c cfg-scan.c
+rmgr rmgr.stripped

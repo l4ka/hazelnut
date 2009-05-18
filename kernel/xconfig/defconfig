@@ -1,0 +1,37 @@
+######################################################################
+##                
+## Copyright (C) 1999, 2000, 2001, 2003,  Karlsruhe University
+##                
+## File path:     xconfig/defconfig
+## Description:   Default configuration.
+##                
+## @LICENSE@
+##                
+## $Id: defconfig,v 1.8 2003/04/26 22:57:05 ud3 Exp $
+##                
+######################################################################
+#
+CONFIG_ARCH_X86=y
+#
+CONFIG_ARCH_X86_I686=y
+CONFIG_ARCH_ARM_DNARD=y
+CONFIG_ARCH_MIPS_R4000=y
+CONFIG_ARCH_SH_EMU=y
+CONFIG_ARCH_M68K_DRAGONBALL=y
+#
+CONFIG_VERSION_X0=y
+CONFIG_JOCHEN_BUGS=n
+#
+CONFIG_DEBUGGER_KDB=y
+CONFIG_DEBUGGER_IO_INCOM=y
+CONFIG_DEBUGGER_IO_OUTCOM=y
+CONFIG_DEBUGGER_IO_SCREEN_VGA=y
+CONFIG_DEBUGGER_IO_KBD_US=y
+
+CONFIG_DEBUG=y
+CONFIG_DEBUG_TRACE_KPF=y
+CONFIG_DEBUG_TRACE_UPF=y
+CONFIG_DEBUG_TRACE_IPC=y
+CONFIG_DEBUG_TRACE_MDB=y
+CONFIG_DEBUG_BREAKIN=y
+CONFIG_DEBUG_KDB_ONSTART=y

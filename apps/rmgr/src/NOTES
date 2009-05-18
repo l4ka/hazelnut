@@ -1,0 +1,44 @@
+Debug Directives
+
+The following directives only affect the resource-manager thread
+(lthread 1), not the pager thread (lthread 0) of the Rmgr server task.
+
+verbose
+
+    Log all request and response messages for *failed* requests 
+    (that is, for request to which RMGR responds with first_dword == -1).
+
+debug
+
+    As "verbose", but additionally enter the L4 kernel debugger every
+    time a request fails.
+
+debug_log MASK TYPES
+
+    MASK is a bit vector containing a bit for each Rmgr protocol (bit
+    0 -> RMGR_RMGR, bit 1 -> RMGR_MEM, bit 2 -> RMGR_TASK, 3 ->
+    RMGR_IRQ; see <l4/server/rmgr.h>.  
+
+    "debug_log" never does anything for a protocol whose bit has not
+    been set in MASK.  If bit 1 of TYPES has also been set, action is
+    further constrained to the request number specified in bits 31..16
+    of TYPES.
+
+    Apart from further constraining action to particular requests,
+    TYPES also defines the kind of action to be taken.  In particular,
+    the bits of TYPES have the following meanings:
+
+    TYPES bit	 meaning
+
+    31..16	 Specifies a request number action should be limited
+		 to; for example, 1 means RMGR_TASK_ALLOC.  See
+		 <l4/server/rmgr.h>.
+		 This value is only meaningful when bit 1 is also set.
+
+    2		 enter the kernel debugger.
+
+    1		 Limit action to the request number specified by bits
+		 31..16.  If not set, logging is enabled for all
+		 request numbers.
+
+    0		 Log request and response message.

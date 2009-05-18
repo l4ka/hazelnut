@@ -1,0 +1,75 @@
+farcalls.o: farcalls.c ../../include/universe.h ../../include/config.h \
+ ../../include/macros.h ../../include/types.h ../../include/kernel.h \
+ ../../include/arm/config.h ../../include/arm/dnard/platform.h \
+ ../../include/lib.h ../../include/sync.h ../../include/arm/notify.h \
+ ../../include/kmemory.h ../../include/thread.h ../../include/ipc.h \
+ ../../include/tcb.h ../../include/arm/tcb.h ../../include/schedule.h \
+ ../../include/interrupt.h ../../include/arm/cpu.h \
+ ../../include/arm/dnard/cpu.h ../../include/arm/memory.h \
+ ../../include/arm/mapping.h ../../include/arm/thread.h \
+ ../../include/arm/space.h ../../include/kdebug.h \
+ ../../include/arm/kdebug.h
+init.o: init.c ../../include/universe.h ../../include/config.h \
+ ../../include/macros.h ../../include/types.h ../../include/kernel.h \
+ ../../include/arm/config.h ../../include/arm/dnard/platform.h \
+ ../../include/lib.h ../../include/sync.h ../../include/arm/notify.h \
+ ../../include/kmemory.h ../../include/thread.h ../../include/ipc.h \
+ ../../include/tcb.h ../../include/arm/tcb.h ../../include/schedule.h \
+ ../../include/interrupt.h ../../include/arm/cpu.h \
+ ../../include/arm/dnard/cpu.h ../../include/arm/memory.h \
+ ../../include/arm/mapping.h ../../include/arm/thread.h \
+ ../../include/arm/space.h ../../include/kdebug.h \
+ ../../include/arm/kdebug.h ../../include/arm/farcalls.h
+memory.o: memory.c ../../include/universe.h ../../include/config.h \
+ ../../include/macros.h ../../include/types.h ../../include/kernel.h \
+ ../../include/arm/config.h ../../include/arm/dnard/platform.h \
+ ../../include/lib.h ../../include/sync.h ../../include/arm/notify.h \
+ ../../include/kmemory.h ../../include/thread.h ../../include/ipc.h \
+ ../../include/tcb.h ../../include/arm/tcb.h ../../include/schedule.h \
+ ../../include/interrupt.h ../../include/arm/cpu.h \
+ ../../include/arm/dnard/cpu.h ../../include/arm/memory.h \
+ ../../include/arm/mapping.h ../../include/arm/thread.h \
+ ../../include/arm/space.h ../../include/kdebug.h \
+ ../../include/arm/kdebug.h ../../include/mapping.h \
+ ../../include/arm/syscalls.h ../../include/arm/farcalls.h \
+ ../../include/tracepoints.h ../../include/tracebuffer.h \
+ ../../include/tracepoint_list.h
+exception.o: exception.S ../../include/config.h ../../include/macros.h \
+ ../../include/arm/config.h ../../include/arm/dnard/platform.h \
+ ../../include/arm/syscalls.h ../../include/arm/cpu.h \
+ ../../include/arm/dnard/cpu.h
+kmemory.o: kmemory.c ../../include/universe.h ../../include/config.h \
+ ../../include/macros.h ../../include/types.h ../../include/kernel.h \
+ ../../include/arm/config.h ../../include/arm/dnard/platform.h \
+ ../../include/lib.h ../../include/sync.h ../../include/arm/notify.h \
+ ../../include/kmemory.h ../../include/thread.h ../../include/ipc.h \
+ ../../include/tcb.h ../../include/arm/tcb.h ../../include/schedule.h \
+ ../../include/interrupt.h ../../include/arm/cpu.h \
+ ../../include/arm/dnard/cpu.h ../../include/arm/memory.h \
+ ../../include/arm/mapping.h ../../include/arm/thread.h \
+ ../../include/arm/space.h ../../include/kdebug.h \
+ ../../include/arm/kdebug.h
+mapping.o: mapping.c ../../include/universe.h ../../include/config.h \
+ ../../include/macros.h ../../include/types.h ../../include/kernel.h \
+ ../../include/arm/config.h ../../include/arm/dnard/platform.h \
+ ../../include/lib.h ../../include/sync.h ../../include/arm/notify.h \
+ ../../include/kmemory.h ../../include/thread.h ../../include/ipc.h \
+ ../../include/tcb.h ../../include/arm/tcb.h ../../include/schedule.h \
+ ../../include/interrupt.h ../../include/arm/cpu.h \
+ ../../include/arm/dnard/cpu.h ../../include/arm/memory.h \
+ ../../include/arm/mapping.h ../../include/arm/thread.h \
+ ../../include/arm/space.h ../../include/kdebug.h \
+ ../../include/arm/kdebug.h ../../include/mapping.h
+resources.o: resources.c ../../include/universe.h \
+ ../../include/config.h ../../include/macros.h ../../include/types.h \
+ ../../include/kernel.h ../../include/arm/config.h \
+ ../../include/arm/dnard/platform.h ../../include/lib.h \
+ ../../include/sync.h ../../include/arm/notify.h \
+ ../../include/kmemory.h ../../include/thread.h ../../include/ipc.h \
+ ../../include/tcb.h ../../include/arm/tcb.h ../../include/schedule.h \
+ ../../include/interrupt.h ../../include/arm/cpu.h \
+ ../../include/arm/dnard/cpu.h ../../include/arm/memory.h \
+ ../../include/arm/mapping.h ../../include/arm/thread.h \
+ ../../include/arm/space.h ../../include/kdebug.h \
+ ../../include/arm/kdebug.h ../../include/tracepoints.h \
+ ../../include/tracebuffer.h ../../include/tracepoint_list.h

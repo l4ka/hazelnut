@@ -1,0 +1,213 @@
+Loading NMAKE
+
+Microsoft (R) Program Maintenance Utility   Version 1.20
+Copyright (c) Microsoft Corp 1988-92. All rights reserved.
+
+	cd \ln-21\src\kernel
+	..\..\make\xml-pent adrsman5 as5
+Microsoft (R) Macro Assembler Version 6.11
+Copyright (C) Microsoft Corp 1981-1993.  All rights reserved.
+
+ Assembling: adrsman5.as5
+
+C:\ln-21\src\kernel>
+
+	cd \ln-21\src\kernel
+	..\..\make\xml-pent cpuctr5 as5
+Microsoft (R) Macro Assembler Version 6.11
+Copyright (C) Microsoft Corp 1981-1993.  All rights reserved.
+
+ Assembling: cpuctr5.as5
+
+C:\ln-21\src\kernel>
+
+	cd \ln-21\src\kernel
+	..\..\make\xml-pent dispatch asm
+Microsoft (R) Macro Assembler Version 6.11
+Copyright (C) Microsoft Corp 1981-1993.  All rights reserved.
+
+ Assembling: dispatch.asm
+
+C:\ln-21\src\kernel>
+
+	cd \ln-21\src\kernel
+	..\..\make\xml-pent emuctr asm
+Microsoft (R) Macro Assembler Version 6.11
+Copyright (C) Microsoft Corp 1981-1993.  All rights reserved.
+
+ Assembling: emuctr.asm
+
+C:\ln-21\src\kernel>
+
+	cd \ln-21\src\kernel
+	..\..\make\xml-pent intctr asm
+Microsoft (R) Macro Assembler Version 6.11
+Copyright (C) Microsoft Corp 1981-1993.  All rights reserved.
+
+ Assembling: intctr.asm
+
+C:\ln-21\src\kernel>
+
+	cd \ln-21\src\kernel
+	..\..\make\xml-pent ipcman5 as5
+Microsoft (R) Macro Assembler Version 6.11
+Copyright (C) Microsoft Corp 1981-1993.  All rights reserved.
+
+ Assembling: ipcman5.as5
+
+C:\ln-21\src\kernel>
+
+	cd \ln-21\src\kernel
+	..\..\make\xml-pent kdebug asm
+Microsoft (R) Macro Assembler Version 6.11
+Copyright (C) Microsoft Corp 1981-1993.  All rights reserved.
+
+ Assembling: kdebug.asm
+
+C:\ln-21\src\kernel>
+
+	cd \ln-21\src\kernel
+	..\..\make\xml-pent kdiopc asm
+Microsoft (R) Macro Assembler Version 6.11
+Copyright (C) Microsoft Corp 1981-1993.  All rights reserved.
+
+ Assembling: kdiopc.asm
+
+C:\ln-21\src\kernel>
+
+	cd \ln-21\src\kernel
+	..\..\make\xml-pent ktest5 as5
+Microsoft (R) Macro Assembler Version 6.11
+Copyright (C) Microsoft Corp 1981-1993.  All rights reserved.
+
+ Assembling: ktest5.as5
+
+C:\ln-21\src\kernel>
+
+	cd \ln-21\src\kernel
+	..\..\make\xml-pent memctr asm
+Microsoft (R) Macro Assembler Version 6.11
+Copyright (C) Microsoft Corp 1981-1993.  All rights reserved.
+
+ Assembling: memctr.asm
+
+C:\ln-21\src\kernel>
+
+	cd \ln-21\src\kernel
+	..\..\make\xml-pent pagctr5 as5
+Microsoft (R) Macro Assembler Version 6.11
+Copyright (C) Microsoft Corp 1981-1993.  All rights reserved.
+
+ Assembling: pagctr5.as5
+
+C:\ln-21\src\kernel>
+
+	cd \ln-21\src\kernel
+	..\..\make\xml-pent pagfault asm
+Microsoft (R) Macro Assembler Version 6.11
+Copyright (C) Microsoft Corp 1981-1993.  All rights reserved.
+
+ Assembling: pagfault.asm
+
+C:\ln-21\src\kernel>
+
+	cd \ln-21\src\kernel
+	..\..\make\xml-pent pagmap5 as5
+Microsoft (R) Macro Assembler Version 6.11
+Copyright (C) Microsoft Corp 1981-1993.  All rights reserved.
+
+ Assembling: pagmap5.as5
+
+C:\ln-21\src\kernel>
+
+	cd \ln-21\src\kernel
+	..\..\make\xml-pent sgmctr asm
+Microsoft (R) Macro Assembler Version 6.11
+Copyright (C) Microsoft Corp 1981-1993.  All rights reserved.
+
+ Assembling: sgmctr.asm
+
+C:\ln-21\src\kernel>
+
+	cd \ln-21\src\kernel
+	..\..\make\xml-pent sigma0 asm
+Microsoft (R) Macro Assembler Version 6.11
+Copyright (C) Microsoft Corp 1981-1993.  All rights reserved.
+
+ Assembling: sigma0.asm
+
+C:\ln-21\src\kernel>
+
+	cd \ln-21\src\kernel
+	..\..\make\xml-pent start asm
+Microsoft (R) Macro Assembler Version 6.11
+Copyright (C) Microsoft Corp 1981-1993.  All rights reserved.
+
+ Assembling: start.asm
+
+C:\ln-21\src\kernel>
+
+	cd \ln-21\src\kernel
+	..\..\make\xml-pent startpc asm
+Microsoft (R) Macro Assembler Version 6.11
+Copyright (C) Microsoft Corp 1981-1993.  All rights reserved.
+
+ Assembling: startpc.asm
+
+C:\ln-21\src\kernel>
+
+	cd \ln-21\src\kernel
+	..\..\make\xml-pent tcbman asm
+Microsoft (R) Macro Assembler Version 6.11
+Copyright (C) Microsoft Corp 1981-1993.  All rights reserved.
+
+ Assembling: tcbman.asm
+
+C:\ln-21\src\kernel>
+
+	cd \ln-21\src\kernel
+	..\..\make\xml-pent yoonseva asm
+Microsoft (R) Macro Assembler Version 6.11
+Copyright (C) Microsoft Corp 1981-1993.  All rights reserved.
+
+ Assembling: yoonseva.asm
+
+C:\ln-21\src\kernel>
+
+	cd \ln-21\bin-pent
+	link @ln.rsp
+
+Microsoft (R) Segmented Executable Linker  Version 5.31.009 Jul 13 1992
+Copyright (C) Microsoft Corp 1984-1992.  All rights reserved.
+
+Object Modules [.obj]: kernel5+
+Object Modules [.obj]: startpc+
+Object Modules [.obj]: start+
+Object Modules [.obj]: cpuctr5+
+Object Modules [.obj]: ipcman5+
+Object Modules [.obj]: dispatch+
+Object Modules [.obj]: intctr+
+Object Modules [.obj]: tcbman+
+Object Modules [.obj]: memctr+
+Object Modules [.obj]: sgmctr+
+Object Modules [.obj]: pagctr5+
+Object Modules [.obj]: pagfault+
+Object Modules [.obj]: pagmap5+
+Object Modules [.obj]: adrsman5+
+Object Modules [.obj]: emuctr+
+Object Modules [.obj]: yoonseva+
+Object Modules [.obj]: kdiopc+
+Object Modules [.obj]: kdebug+
+Object Modules [.obj]: sigma0+
+Object Modules [.obj]: ktest5,ln.exe,ln.map;
+LINK : warning L4021: no stack segment
+
+sigma0.obj(sigma0.asm) : error L2029: 'ide_stack' : unresolved external
+sigma0.obj(sigma0.asm) : error L2029: 'ide_start' : unresolved external
+start.obj(start.asm) : error L2029: 'ide_end' : unresolved external
+start.obj(start.asm) : error L2029: 'ide_begin' : unresolved external
+
+
+There were 4 errors detected
+NMAKE : fatal error U1077: 'LINK' : return code '2'
+Stop.

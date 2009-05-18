@@ -1,0 +1,148 @@
+          PROPOSAL FOR NEW SIGMA0 VERSION X.0 RPC PROTOCOL
+
+The sigma0 RPC protocol that is defined in the L4/x86 reference manual
+is not really suited for architectures other than x86.  As such, one
+will have to define new versions of the protocol for almost every new
+architecture that L4 is built for.  This proposal tries to solve the
+problem by having a protocol which is generic enough to suit all
+architectures while still being compatible to older versions of the
+protocol.  In addition, the protocol enable pagers to give back memory
+to sigma0.
+
+As usual, the bits in the specification that are tildes (~) are
+undefined/have no meaning.  The protocol itself uses three words for
+communication: w0, w1, and w2.  If the third word equals zero and
+first word does not equal 0xfffffffc, the request is treated as a
+pagefault RPC and is translated into the appropriate sigma0 protocol
+message.
+
+As with the previous sigma0 RPC protocol, a page (other than the
+kernel info page) can not be mapped to two different address spaces.
+Requests that can not be carried out should reply with a 0-word in w0
+to the caller
+
+All fpages mapped/granted to the caller are assured to span a
+physically contigous memory region, even when the caller requests for
+an fpage located at an arbitrary position.
+
+
+KERNEL COMMUNICATION
+
+
+  w0	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~11
+  w1	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~~~
+  w2	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ssss ss~~
+
+	Grant an fpage to the kernel.  Size is specified in w2.  The
+	fpage might be located on an arbitrary position.  If request
+	can not be fulfilled, a 0-word should be replied.
+
+
+  w0	0000 0000 0000 0000  0000 0000 0000 0001
+  w1	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~~~
+  w2	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~~~
+
+	Reply (in w0) which amount of memory in bytes that is
+	recommended for use by the kernel.
+
+
+  For compatibility with older versions of the sigma0 RPC protocol
+  the following message is also supported.
+
+  w0	1111 1111 1111 1111  1111 1111 1111 1100
+  w1	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~~~
+  w2	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~~~
+
+	Grant an arbitrary 4K page to the kernel.
+
+
+NON-KERNEL COMMUNICATION
+
+
+  w0	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~11
+  w1	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~~~
+  w2	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ssss ss01
+
+	Map an fpage located on an arbitrary position back to the
+	caller.  The size part of the fpage in w2 indicates the size
+	of the wanted fpage.  If request can not be fulfilled, a
+	0-word should be replied.
+
+
+  w0	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~11
+  w1	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~~~
+  w2	pppp pppp pppp pppp  pppp ~~~~ ssss ss11
+
+	Map the indicated fpage to the caller.  If request can not be
+	fulfilled, a 0-word should be replied.
+
+
+  w0	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~11
+  w1	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~~~
+  w2	pppp pppp pppp pppp  pppp ~~~~ ssss ss10
+
+	Unmap the specified fpage from the caller's address space.
+	Pages within the fpage that are not owned by the caller should
+	not be unmapped.  No reply is sent to the caller.
+
+
+  w0	0000 0000 0000 0000  0000 0000 0000 0001
+  w1	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~~~
+  w2	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~~~
+
+	Map the kernel info page to the caller.
+
+
+  For compatibility with the pageault protocol and older versions of
+  sigma0 RPC, the following messages are also supported.
+
+  w0	1111 1111 1111 1111  1111 1111 1111 1100
+  w1	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~~~
+  w2	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~~~
+
+	Map an arbirary 4K page to the caller's address space.
+
+
+  w0	aaaa aaaa aaaa aaaa  aaaa aaaa aaaa aa00
+  w1	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~~~
+  w2	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~~~
+
+	On x86: If "`a' <= 1G", map indicated physical 4K frame to
+	caller.  If "1G < `a' <= 3G", map inidacted 4M frame plus 1G
+	to the caller.
+
+	On other architectures: Map the indicated physical frame to
+	the caller (with the preferred page size of the architecture).
+
+
+  w0	aaaa aaaa aaaa aaaa  aaaa aaaa aaaa aa01
+  w1	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ 0101 10~~
+  w2	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~~~
+
+	Only on x86: Map the indicated 4M physical frame to the caller.
+
+
+  w0	aaaa aaaa aaaa aaaa  aaaa aaaa aaaa aa~~
+  w1	~~~~ ~~~~ ~~~~ ~~~~  ~~~~ ~~~~ ~~~~ ~~~~
+  w2	0000 0000 0000 0000  0000 0000 0000 0000
+
+	Map the indicated physical frame to the caller (with the
+	preferred page size of the architecture).
+
+
+
+================================================================
+$Log: sigma0-new.txt,v $
+Revision 1.3  2001/04/25 15:03:21  skoglund
+Sigma0 should map 4MB frame _plus_ 1G when receiving a pagefault above
+1G.
+
+Revision 1.2  2001/04/20 20:37:59  skoglund
+Updated description of the new version of sigma0 X.0 RPC protocol.  The
+new version is fully backwards compatible with the old sigma0 RPC, and
+also supports pagefaults generated by an X.0 kernel (i.e., where third
+word is zero).
+
+Revision 1.1  2000/09/29 11:10:35  skoglund
+Proposal for new architecture independent sigma0 RPC protocol.
+

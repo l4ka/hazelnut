@@ -1,0 +1,15 @@
+This directory contains a modified version of RMGR. RMGR is part of
+DROPS, a project of University of Dresden's Operating Systems Group.
+DROPS is published under GPL as is this version of RMGR.
+
+Among the modifications mentioned above are:
+o adaptation to L4 Version X.0 interface
+o handling of L4/Ka kernels
+o -maxmem option
+o -roottask option
+
+Actually, RMGR links against OSKit libraries and the OSKit support
+library of DROPS. However, we prefer to include these libs in binary
+format to avoid having to build OSKit and half of DROPS to get just
+RMGR. Sources of these libs are available on the DROPS download site.
+

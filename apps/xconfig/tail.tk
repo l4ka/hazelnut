@@ -1,0 +1,69 @@
+# FILE: tail.tk
+# This file is boilerplate TCL/TK function definitions for 'make xconfig'.
+#
+# CHANGES
+# =======
+#
+# 8 January 1998, Michael Elizabeth Chastain, <mec@shout.net>
+# Arrange buttons in three columns for better screen fitting.
+#
+
+#
+# Read the user's settings from .config.  These will override whatever is
+# in config.in.  Don't do this if the user specified a -D to force
+# the defaults.
+#
+if { [file readable .config] == 1} then {
+	if { $argc > 0 } then {
+		if { [lindex $argv 0] != "-D" } then {
+			read_config .config
+		}
+		else
+		{
+			read_config $defaults
+		}
+	} else {
+		read_config .config
+	}
+} else {
+	read_config $defaults
+}
+
+update_mainmenu .f0
+
+button .f0.control.save -anchor w -text "Save and Exit" \
+    -command { writeconfig .config ../include/config.h; read_config .config; \
+	       writeconfig .config ../include/config.h; exit; wrapup .wrap }
+
+button .f0.control.quit -anchor w -text "Quit Without Saving" \
+    -command { maybe_exit .maybe }
+
+button .f0.control.load -anchor w -text "Load Configuration from File" \
+    -command { load_configfile .load "Load Configuration from file" read_config_file
+}
+
+button .f0.control.store -anchor w -text "Store Configuration to File" \
+    -command { load_configfile .load "Store Configuration to file" write_config_file }
+
+#
+# Now pack everything.
+#
+
+pack .f0.control.store .f0.control.load .f0.control.quit .f0.control.save \
+    -padx 0 -pady 0 -side bottom -fill x
+pack .f0.arch .f0.apps .f0.control -side left -padx 5 -pady 0 -fill y
+pack .f0 -padx 5 -pady 5
+
+#
+# If we cannot write our config files, disable the write button.
+#
+if { [file exists .config] == 1 } then {
+		if { [file writable .config] == 0 } then {
+			.f0.control.save configure -state disabled
+		}
+	} else {
+		if { [file writable .] == 0 } then {
+			.f0.control.save configure -state disabled
+		}
+	}
+

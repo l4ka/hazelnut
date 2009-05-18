@@ -1,0 +1,30 @@
+
+Microsoft (R) Program Maintenance Utility   Version 1.20
+Copyright (c) Microsoft Corp 1988-92. All rights reserved.
+
+ Assembling: ..\kernel\adrsman.asm
+ Assembling: ..\kernel\cpuctr.asm
+ Assembling: ..\kernel\dispatch.asm
+ Assembling: ..\kernel\emuctr.asm
+ Assembling: ..\kernel\intctr.asm
+ Assembling: ..\kernel\ipcman.asm
+ Assembling: ..\kernel\kdebug.asm
+ Assembling: ..\kernel\kdiopc.asm
+ Assembling: ..\kernel\ktest.asm
+ Assembling: ..\kernel\memctr.asm
+ Assembling: ..\kernel\pagctr.asm
+ Assembling: ..\kernel\pagfault.asm
+ Assembling: ..\kernel\pagmap.asm
+ Assembling: ..\kernel\sgmctr.asm
+ Assembling: ..\kernel\sigma0.asm
+ Assembling: ..\kernel\start.asm
+ Assembling: ..\kernel\startpc.asm
+ Assembling: ..\kernel\tcbman.asm
+ Assembling: ..\kernel\yoonseva.asm
+ Assembling: ..\kernel\boot.asm
+Object Modules [.obj]: /nologo kernel startpc  start   cpuctr  dispatch ipcman intctr tcbman memctr sgmctr+
+Object Modules [.obj]: pagctr pagfault pagmap adrsman emuctr  yoonseva kdiopc kdebug sigma0 ktest,l4.exe,l4.map;
+LINK : warning L4021: no stack segment
+	pause
+Press any key to continue . . .
+

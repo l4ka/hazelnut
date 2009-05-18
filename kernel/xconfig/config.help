@@ -1,0 +1,513 @@
+######################################################################
+##                
+## Copyright (C) 1999-2002,  Karlsruhe University
+##                
+## File path:     xconfig/config.help
+## Description:   Help file for configuration tool.
+##                
+## @LICENSE@
+##                
+## $Id: config.help,v 1.30 2002/06/07 17:02:29 skoglund Exp $
+##                
+######################################################################
+
+architecture selection
+CONFIG_ARCH_X86
+  Architecture selection
+
+  Those who don't know what this is all about shoudn't care about it at all.
+_
+
+platform selection for ARM
+CONFIG_ARCH_ARM_DNARD
+  Select the flavour of your ARM-based box
+
+  DNARD:  The Digital Network Appliance Reference Design
+    http://www.research.digital.com/SRC/iag/
+
+  Brutus: intel's SA-1100 based evaluation board
+    http://developer.intel.com/design/strong/quicklist/\
+     eval-plat/sa-1100me.htm
+
+  EP7211: Cirrus Logic's ARM7 based evaluation board
+    http://www.cirrus.com/design/products/overview/\
+     index.cfm?ProductID=110
+_
+  
+platform selection for x86
+CONFIG_ARCH_X86_I586
+  Select the flavour of your x86 box
+
+  i586: Pentium
+  i686: PII, PIII
+  P4:   Pentium 4
+_
+
+CONFIG_ARCH_MIPS_R4000
+  Oooops. I feel as if someone had mentioned the word MIPS. What's that?
+
+
+                               BUMMER!
+_
+
+CONFIG_JOCHEN_BUGS
+  Jochen-bug compatibility mode
+
+  Due to the possibility of interpreting the L4 specification differently,
+  certain operations might be implemented differently in kernels. Whether
+  a certain implementation is a bug or not heavily depends on your reading
+  of the specification.
+
+  Saying Y here implements some operations like the assembly kernel does:
+  - a thread is not allowed to do IPC with itself
+  - offset of actually transfered dwords in long messages
+
+  If you want to use Flick/L4 you have to say Y here.
+
+  Be warned that saying N here could break your existing software. However,
+  then this kernel implements _OUR_ understanding of the specification.
+  
+  Note: This doesn't influence those parts of the specification that are
+        not implemented yet in this kernel.
+_
+
+default sigma0 entry point
+CONFIG_SIGMA0_ENTRY
+  Turning this on initializes the kernel info page with the given
+  values. Hence, there's no need for the boot process to write the
+  sigma0 initial IP and SP values to the kernel info page.
+
+  src/global.c
+_
+
+default root task entry point
+CONFIG_ROOTTASK_ENTRY
+  Turning this on initializes the kernel info page with the given
+  values. Hence, there's no need for the boot process to write the
+  initial IP and SP values for the root task to the kernel info page.
+
+  src/global.c
+_
+
+Architecture specific kmemory
+CONFIG_HAVE_ARCH_KMEM
+  If set, the architecture specific kernel memory allocator will
+  be activeted instead of the generic one (i.e. kmem_alloc() and
+  kmem_free()).
+
+  src/kmemory.c
+_
+
+CONFIG_SMP
+  Symmetric Multi Processoring with L4 is considered HIGHLY EXPERIMENTAL.
+  Interfaces to control migration are still floating, semantics of some
+  system calls that are fine on uniprocessors are not completely defined
+  on SMPs (system calls executed serially before may run in parallel now),
+  scheduling relying on hard priorities renders halfways useless if there
+  are multiple parallel time axes, etc. ...
+
+  L4 on SMP is currently only tested on i440BX chipsets. In contrast to
+  what one would expect, an SMP kernel may not work on uniprocessors.
+
+  Despite that, everybody is encouraged to mess around with this feature.
+_
+
+CONFIG_SMP_MAX_CPU
+  Sometimes it may be desirable to limit the number of actived CPUs.
+  This is an upper limit only, not a must-have.
+
+  Btw, Intel's PIII systems seem to be limited to 15 processors anyway.
+_
+
+Marcus SMP XP IPC playground
+CONFIG_MARCUS_XP_IPC
+  This is only effective, if the SMP Nucleus was configured. Turning
+  this on uses an experimental IPC path with proxy threads instead
+  of the normal IPI handler based approach.
+_
+
+CONFIG_X86_IOAPIC
+  The IO-APIC is the Advanced I/O Programmable Interrupt Controller found
+  in SMP PC boxes. It's required to distribute IRQs across multiple CPUs.
+  There is at least one IO-APIC per SMP system and one APIC in every CPU.
+_
+
+CONFIG_X86_APICTIMER
+  The APIC is the Advanced Programmable Interrupt Controller found in SMP-
+  capable IA32 CPUs. In contrast to the IO-APIC, there is an APIC per CPU.
+
+  In today's L4 user land, every device driver thinks that it must reenable
+  and sometimes even acknowledge/disable the IRQ on the PIC. Without proper
+  locking this can lead to totally messed up PIC states easily. If a driver
+  fails to handle the PIC correctly, timer interrupts could be disabled and
+  scheduling stops.
+  When using the APIC timer instead, a driver can no longer to accidently
+  disable the kernel timer. However, it still could disable IRQs ... :-(
+_
+
+CONFIG_X86_INKERNEL_PIC
+  Enables automatic PIC acknowledgement similar to the APIC (which is not
+  exported to user mode). When an interrupt occurs, the IRQ on the PIC is 
+  is disabled. It is re-enabled on the next IPC which may potentially receive
+  an interrupt. (receive(#irq) or wait)
+
+-
+
+CONFIG_PERFMON
+  Allows kernel debugger to set up the Performance Monitoring Counters, and
+  user-level applications to access them using the RDPMC instruction.
+_
+
+CONFIG_X86_WBINVD_EMULATION
+  The wbinvd instruction flushes the internal caches. That is used by 
+  some L4Linux drivers. This button allows to enable full emulation (i.e.
+  WBINVD is executed by the kernel). Otherwise, the instruction is simply
+  skipped.
+-
+
+CONFIG_X86_P4_BTS
+  Allow the the Pentium 4 Branch Trace Store to be enabled and accessed
+  from within in the kernel debugger.  The branch trace store keeps track
+  of the most recent branches the processor has taken, and can be used for,
+  e.g., dubugging purposes.  Enabling the trace store will, however,
+  seriously degrade the performance of your system.
+_
+
+CONFIG_X86_P4_BTS_BUFSIZE
+  The amount of memory used for storing branch traces (in KB).  Each
+  branch trace is 12 bytes.  A 4KB buffer can as such contain up to 341
+  branch trace records.
+_
+
+CONFIG_X86_P4_PEBS
+  Allow the Pentium 4 Precise Event-Based Sampling to be enabled and
+  accessed from within the kernel debugger.  Precise Event-Based Sampling
+  requires the CPU to have an APIC.
+_
+
+CONFIG_X86_P4_PEBS_BUFSIZE
+  The amount of memory used for storing precise event samples (in KB).
+  Each branch trace is 40 bytes.  A 64KB buffer can as such contain up to
+  1638 precise event samples.
+_
+
+CONFIG_ENABLE_PROFILING
+  Allows continuous profiling to be performed on user-level and kernel-
+  level code.  The profiling may be triggered by various events, and
+  samples (registers or events) may be measured for single instructions.
+  Profiling requires the CPU to have an APIC.
+_
+
+CONFIG_PROFILING_WITH_NMI
+  Enables profiling events to be triggered using Non Maskable Interrupts.
+  This had the advantage that even the kernel or user-level drivers with
+  interrupts disabled can be profiled.  Needless to say, if you want
+  to profile the kernel you must enable this option.
+_
+
+CONFIG_PROFILING_MAX_VAL
+  An upper limit on the number of value samples per instruction that
+  you can log in your profiling log.  Raising this number means that
+  you can collect more statistics about each sampled instruction but
+  also that more memory will be used for each sample (i.e., it lowers
+  the maximum number of profile log entries).
+_
+
+CONFIG_IPC_FASTPATH
+  Hazelnut supports a fast IPC implementation which is 100% pure assembly.
+  This feature is currently still experimental but works in most cases.
+_
+
+CONFIG_ENABLE_SMALL_AS
+  Small address spaces is a mechanism for avoiding TLB flushes on address
+  space switches.  Currently, small spaces is only implmented on IA-32.  It
+  emulates tagged TLBs (and physically tagged Trace Caches in the case of
+  Pentium 4) using the IA-32 segmentation model.
+_
+
+CONFIG_GLOBAL_SMALL_SPACES
+  Put small spaces into global pages.  This avoids TLB entries for small
+  address spaces to be flushed on normal TLB flush operations.
+_
+
+CONFIG_SMALL_AREA_512MB
+  The size of the area used for small spaces (default 512MB).  The size of
+  the area also dictates the minimum size of a small space and the area
+  remaining to be used for large spaces.
+
+  Size    Min. space size    Used virtual area
+  ----    ---------------    -----------------
+  512MB         4MB          0xC0000000 - 0xE0000000
+    1GB         8MB          0xA0000000 - 0xE0000000
+    2GB        16MB          0x60000000 - 0xE0000000
+
+  Note that the user-level API for setting small spaces does not change
+  to reflect the larger small space area size.  A request for a 4MB space
+  will thus be treated as a request for a 8MB or 16MB space for the 1GB
+  and 2GB case, respectively.
+_
+
+CONFIG_ENABLE_TCB_PAGER
+  This stuff is related to the persistence in L4 approach. Actually, it's
+  not ment to be in here.
+
+  It's considered somewhere between EXTREMELY EXPERIMENTAL and DANGEROUS.
+  Don't turn this on unless you are at least one of the probably not more
+  than 1.5 people that could know what it's all about. You've been warned!
+_
+
+CONFIG_CACHEABILITY_BITS
+
+  Enable ability to specify bits in the fpage of a map operation
+  controlling the cacheability and/or bufferability of the mapped page
+  frames.  Note that the cacheability and bufferability bits are hardware
+  dependent and may not produce the desired result.
+_
+
+
+CONFIG_DEBUGGER_KDB
+  This enables the built-in kernel debugger. This is a must.
+
+  There was the idea of having alternative debugger interfaces like GDB,
+  but the need for that was not strong enough.
+_
+
+CONFIG_DEBUGGER_GDB
+  Forget this tunable. Reenable the L4/Ka Kernel Debugger!
+_
+
+CONFIG_DEBUGGER_NEW_KDB
+  The new debugger. Get more information at
+      http://i30www.ira.uka.de/~swagner
+_
+
+CONFIG_DEBUGGER_IO_INKBD
+  This option selects the input device for the kernel debugger.
+
+-
+
+CONFIG_DEBUGGER_IO_OUTSCRN
+  This option selects the output device for the kernel debugger.
+
+-
+
+CONFIG_DEBUGGER_COMPORT
+  Select the com-port address for the kernel debugger output. That 
+  feature is only available if 'serial' was selected as input and/or 
+  output device.
+
+  Common ports are:
+    COM1: 3F8
+    COM2: 2E8
+
+-
+
+CONFIG_DEBUGGER_COMSPEED
+  Selects the speed of the serial line for debugger output. This feature 
+  is only available if 'serial' was selected as input and/or output device.
+
+- 
+
+CONFIG_DEBUGGER_IO_SCREEN_VGA
+  Screen output device. This feature is only available if 'screen' was 
+  selected as output device
+
+-
+
+CONFIG_DEBUGGER_IO_KBD_DE
+  Keyboard layout for the kernel debugger. (Not implemented ;)
+
+-
+
+Enable Disassembler
+CONFIG_DEBUG_DISAS
+  This enables the disassembler in the built-in kernel debugger.
+  The disassembler uses binutil's libopcodes.
+
+  Be warned that this enlarges your kernel by ~60k for x86
+  and by ~13k for ARM.
+_
+
+CONFIG_KEEP_LAST_BRANCHES
+  Keep the state of the last-branch model specific registers upon
+  exceptions and enter kdebug instructions.  Useful for seeing where the
+  last branch occured in user level (e.g., where a branch to an invalid
+  instruction occured).
+
+_
+Disable INTs in user mode
+CONFIG_USERMODE_NOIRQ
+  Setting this option to YES creates all user threads with disabled
+  interrupts. This could easily disable timer triggered events like
+  scheduling, IPC timeouts, etc.
+
+  create_user_stack_frame in include/arch/thread.h
+_
+
+CONFIG_DEBUG
+  Enables debugging features and turns on ASSERT macros.
+
+-
+
+CONFIG_DEBUG_BREAKIN
+  Allows to remotely breakin into the kernel debugger by hitting ESC. 
+  Currently, that feature is only available when using the serial line as
+  input device.
+
+-
+
+CONFIG_DEBUG_KDB_ONSTART
+  The kernel enters the kernel debugger before switching to the root task.
+_
+
+CONFIG_DEBUG_SANITY
+  Enables some sanity additional checks. Do not use this feature when 
+  benchmarking - you may experience a major slow-down.
+
+-
+
+Trace kernel page faults
+CONFIG_DEBUG_TRACE_KPF
+  If set to yes, kernel page faults are reported.
+
+  This means that also page faults in the temporary mapping area are
+  reported (which tends to confuse even experienced users from time to
+  time ;-).
+
+  src/arch/memory.c
+_
+
+Trace user page faults
+CONFIG_DEBUG_TRACE_UPF
+  If set to yes, user page faults are reported.
+
+  src/arch/memory.c
+_
+
+Trace interrupts
+CONFIG_DEBUG_TRACE_IRQS
+  If set, detection of an interrupt is reported.
+
+  src/arch/interrupt.c
+_
+
+CONFIG_DEBUG_TRACE_SYSCALLS
+  If set, system calls are traced with their parameters.
+
+  This will cause a major slowdown and the will also have influence on
+  the scheduling behaviour (Never assume that what you see with tracing
+  will happen the same way without syscall tracing!!!)
+_
+
+CONFIG_DEBUG_TRACE_IPC
+  Trace IPCs in a single-entry trace buffer. Depending on the KDB, all
+  the interesting parameters of the IPC system call are dumped with
+  optionally entering the kernel debugger.
+
+  Setting this to Y will cause a certain slowdown of the IPC system call
+  since the parameters are recorded. However activating IPC tracing in
+  the KDB then will cause a major slowdown because the messages are then
+  printed.
+_
+
+Trace Mapping Database
+CONFIG_DEBUG_TRACE_MDB
+  If set, calls to mdb_map() and mdb_flush() are reported.
+
+  src/mapping.c
+
+-
+
+Trace SMP
+CONFIG_DEBUG_TRACE_SMP
+  Traces SMP events (processor detection and startup)
+-
+
+CONFIG_DEBUG_TRACE_IPI
+  Enables IPI tracing - carefull, this is lots of output.
+_
+
+CONFIG_DEBUG_TRACE_MISC
+  Enable loads of informative/debugging output during normal operation.
+  
+  This can induce major slowdown.
+_
+
+CONFIG_DEBUG_TRACE_INIT
+  Enable loads of informative/debugging output during initialization.
+_
+
+CONFIG_DEBUG_SPIN
+  Enables "spinning wheels" in the upper right corner of the screen. To
+  be honest, these are not really wheels. It's a simply an increment of
+  whatever value is in the video memory at that position.
+  On SMPs, the wheels are per CPU - CPU 0 is in the top line.
+
+  Horizontal positions (events may be disabled by other means):
+
+    79: idle loop                                        schedule.c:362
+    78: end of timeslice                                 schedule.c:301
+    77: hardware interrupt                                    ipc.c:309
+    75: switch_to(L4_NIL_ID)                             schedule.c:378
+_
+
+CONFIG_TRACEBUFFER
+  Enables tracebuffer support. The tracebuffer is used by the kernel
+  to record the occurrence of certain events (such as syscalls, interrupts,
+  pagefaults...) together with an associated timestamp. This is useful
+  for debugging because the sequence of events that caused a particular
+  problem can be identified. The buffer is also mapped writable to user 
+  level, so applications can record events as well.  
+
+  This feature causes the kernel to run considerably slower. 
+  If unsure, say N.
+_
+
+CONFIG_ENABLE_TRACEPOINTS
+  Enables tracepoint support in the kernel.  Tracepoints can be used to
+  keep track of how often certain event occur in the kernel, and
+  optionally print debugging information and enter kernel debugger when
+  these events occur.
+_
+
+CONFIG_ENABLE_SWITCH_TRACE
+  Enables tracing of thread switches, recording the instruction pointers
+  and stack pointers of both the source and the destination thread.
+_
+
+CONFIG_SWITCH_TRACE_SIZE
+  Number of thread switches which are recorded.  Traces are recorded in
+  a circular buffer.  When the buffer overflows the oldest traces are
+  overwritten.
+_
+
+CONFIG_IO_FLEXPAGES 
+  This enables support for IO-FlexPages
+  
+-
+
+CONFIG_AUTO_IO_MAP
+  Saying yes to this option will create a default IO-mapping of 64K for 
+  all new Tasks, which results in every task per default being able to 
+  access IO ports. This behaviour is inheritant; a task lacking full 
+  permissions to access all IO-ports creating a new task will result 
+  in the new one having no access at all.
+  
+-
+CONFIG_ENABLE_PVI 
+  As cli and sti are IO instructions, too, enabling IO FlexPages will 
+  result in only the kernel being able to clear and set interrupts 
+  anymore; user tasks will raise an exception 13 instead. Protected 
+  Mode Virtual Interrupts (PVI) solve that problem transparently. 
+  If running in PVI mode, user level tasks can use cli and sti.
+  The PVI implementation is EXPERIMENTAL, rudimentary, and does not 
+  care about priority problems at all.
+-
+
+CONFIG_MEASURE_INT_LATENCY
+  Turn on interrupt latency measurements.  Upon each interrupt we store
+  the value of the local APIC timer (upon interrupt handler entry) in dw0
+  of the returned interrupt IPC.  We store the rdtsc value of the
+  interrupt handler entry in dw1, and the rdtsc value just before returning
+  from sys_ipc() in dw2.
+_

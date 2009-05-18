@@ -1,0 +1,129 @@
+######################################################################
+##                
+## Copyright (C) 1999, 2000, 2001, 2002,  Karlsruhe University
+##                
+## File path:     xconfig/kernel.in
+## Description:   Variuos kernel configurations.
+##                
+## @LICENSE@
+##                
+## $Id: kernel.in,v 1.53 2002/08/15 14:20:43 haeber Exp $
+##                
+######################################################################
+
+mainmenu_option next_comment
+comment 'Kernel Configuration'
+
+bool 'Jochen-bug compatibility mode' CONFIG_JOCHEN_BUGS n
+bool 'specify sigma0 entry point' CONFIG_SIGMA0_ENTRY n
+if [ "$CONFIG_SIGMA0_ENTRY" = "y" ]
+hex ' sigma0 entry IP' CONFIG_SIGMA0_IP 0C000000
+hex ' sigma0 entry SP' CONFIG_SIGMA0_SP 00000000
+fi
+
+bool 'specify root task entry point' CONFIG_ROOTTASK_ENTRY n
+if [ "$CONFIG_ROOTTASK_ENTRY" = "y" ]
+hex ' root task entry IP' CONFIG_ROOTTASK_IP 0C100000
+hex ' root task entry SP' CONFIG_ROOTTASK_SP 00000000
+fi
+
+if [ "$CONFIG_ARCH_ARM" = "y" ]; then
+  bool 'arm - Architecture specific kmemory' CONFIG_HAVE_ARCH_KMEM n
+fi
+
+if [ "$CONFIG_ARCH_X86" = "y" ]; then
+
+  # XXX: Need to test SMP with i585 and Pentium 4
+  if [ "$CONFIG_ARCH_X86_I686" = "y" ]; then
+    bool 'SMP' CONFIG_SMP n
+  fi
+
+  if [ "$CONFIG_SMP" = "y" ]; then
+    int '  number of processors' CONFIG_SMP_MAX_CPU 2
+    bool '  Marcus XP IPC' CONFIG_MARCUS_XP_IPC n
+    define_bool CONFIG_X86_APICTIMER y
+    define_bool CONFIG_X86_IOAPIC y
+    define_bool CONFIG_X86_INKERNEL_PIC n
+  else
+    # XXX: Need to test IO-APIC with i585 and Pentium 4
+    if [ "$CONFIG_ARCH_X86_I686" = "y" ]; then
+      bool 'x86 - Use IO-APIC' CONFIG_X86_IOAPIC n
+    fi
+    if [ "$CONFIG_X86_IOAPIC" = "y" -o "$CONFIG_ENABLE_PROFILING" = "y" ]; then
+      define_bool CONFIG_X86_APICTIMER y
+    else
+      bool 'x86 - Use APIC timer' CONFIG_X86_APICTIMER n
+    fi
+    if [ "$CONFIG_X86_IOAPIC" != "y" ]; then
+      bool 'x86 - In-kernel PIC handling' CONFIG_X86_INKERNEL_PIC n
+    else
+      define_bool CONFIG_X86_INKERNEL_PIC n
+    fi    
+  fi
+
+  # XXX: Need to implement performance counters for i585
+  if [ "$CONFIG_ARCH_X86_I686" = "y" -o "$CONFIG_ARCH_X86_P4" = "y" ]; then
+    bool 'x86 - performance monitoring' CONFIG_PERFMON n
+  fi
+
+  bool 'x86 - enable WBINVD emulation' CONFIG_X86_WBINVD_EMULATION n
+
+  if [ "$CONFIG_ARCH_X86_P4" = "y" -a "$CONFIG_SMP" != "y" ]; then
+    bool 'x86 - Branch Target Store' CONFIG_X86_P4_BTS n
+    if [ "$CONFIG_X86_P4_BTS" = "y" ]; then
+      int  '  BTS buffer size (KB)' CONFIG_X86_P4_BTS_BUFSIZE 4
+    fi
+    bool 'x86 - Precise Event-Based Sampling' CONFIG_X86_P4_PEBS n
+    if [ "$CONFIG_X86_P4_PEBS" = "y" ]; then
+      int  '  PEBS buffer size (KB)' CONFIG_X86_P4_PEBS_BUFSIZE 64
+    fi
+  fi
+
+  # XXX: Need to implement profiling for Pentium 4
+  if [ "$CONFIG_ARCH_X86_I686" = "y" ]; then
+    bool 'x86 - Enable profiling' CONFIG_ENABLE_PROFILING n
+    if [ "$CONFIG_ENABLE_PROFILING" = "y" ]; then
+      bool '  do profiling with NMI' CONFIG_PROFILING_WITH_NMI y
+      int  '  max profile sample values' CONFIG_PROFILING_MAX_VAL 2
+    fi
+  fi
+
+  if [ "$CONFIG_X86_APICTIMER" = "y" -o "$CONFIG_X86_IOAPIC" = "y" -o \
+       "$CONFIG_ENABLE_PROFILING" = "y" -o "$CONFIG_X86_P4_PEBS" = "y" ]; then
+     define_bool CONFIG_X86_APIC y
+  fi
+fi
+
+if [ "$CONFIG_ARCH_X86" = "y" ]; then
+  bool 'Enable IPC FastPath' CONFIG_IPC_FASTPATH n
+  bool 'Enable small address spaces' CONFIG_ENABLE_SMALL_AS n
+  if [ "$CONFIG_ENABLE_SMALL_AS" = "y" ]; then
+    bool 'Small spaces in global pages' CONFIG_GLOBAL_SMALL_SPACES n
+  fi
+  if [ "$CONFIG_ENABLE_SMALL_AS" = "y" ]; then
+    choice 'Small space area size' \
+	"512MB		CONFIG_SMALL_AREA_512MB \
+	 1GB		CONFIG_SMALL_AREA_1GB \
+	 2GB		CONFIG_SMALL_AREA_2GB" 512MB
+  fi
+fi
+if [ "$CONFIG_ARCH_X86" = "y"  -a  "$CONFIG_ENABLE_SMALL_AS" = "n" \
+     -a "$CONFIG_IPC_FASTPATH" =  "n" ]; then
+ bool 'Enable IO-Flexpages' CONFIG_IO_FLEXPAGES n
+fi
+
+if [ "$CONFIG_IO_FLEXPAGES" = "y" ]; then
+ bool 'Implicit IO-mapping' CONFIG_AUTO_IO_MAP n
+fi
+
+if [ "$CONFIG_IO_FLEXPAGES" = "y" -a "$CONFIG_USERMODE_NOIRQ" = "n" \
+	-a "$CONFIG_X86_APICTIMER" = "n"  -a "$CONFIG_X86_IOAPIC" = "n"]; then
+
+ bool 'Enable Virtual Interrupts' CONFIG_ENABLE_PVI n
+fi
+
+bool 'Enable cacheability fpage bits' CONFIG_CACHEABILITY_BITS n
+
+endmenu
+
+

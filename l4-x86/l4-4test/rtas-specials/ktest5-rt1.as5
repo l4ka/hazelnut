@@ -1,0 +1,532 @@
+include l4pre.inc 
+
+  scode
+ 
+  Copyright GMD, L4.KTEST.5, 02,06,96, 15
+
+;*********************************************************************
+;******                                                         ******
+;******         Kernel Test                                     ******
+;******                                                         ******
+;******                                   Author:   J.Liedtke   ******
+;******                                                         ******
+;******                                   created:  14.06.91    ******
+;******                                   modified: 02.06.96    ******
+;******                                                         ******
+;*********************************************************************
+ 
+
+ 
+  public ktest0_start
+  public ktest1_start
+  public ktest0_stack
+  public ktest1_stack
+  public ktest0_stack2
+  public ktest1_stack2
+  public ktest_begin
+  public ktest_end
+
+
+
+.nolist
+include l4const.inc
+include uid.inc
+include adrspace.inc
+include intrifc.inc
+include tcb.inc
+include msg.inc
+include cpucb.inc
+include schedcb.inc
+include lbmac.inc
+include pagmac.inc
+include syscalls.inc
+include kpage.inc
+include l4kd.inc
+.list
+include perfmon.inc
+
+
+
+
+ok_for pentium
+
+
+open_receive equ 1
+
+
+  assume ds:codseg
+
+
+ktest_begin   equ $
+
+
+ping_thread   equ (booter_thread+0*sizeof tcb)
+pong_thread   equ (sigma2_thread+0*sizeof tcb)  
+;ping_thread   equ booter_thread
+;pong_thread   equ (sigma2_thread+3*sizeof tcb)  
+;pong_thread   equ (sigma2_thread+sizeof tcb)
+;pong_thread   equ (booter_thread+sizeof tcb)
+
+
+  align 16
+
+              dd    31 dup (0)
+ktest0_stack  dd    0
+              dd    31 dup (0)
+ktest0_stack2 dd    0
+              dd    31 dup (0)
+ktest1_stack  dd    0
+              dd    31 dup (0)
+ktest1_stack2 dd    0
+
+
+ktest0_ready  db    false
+ktest1_ready  db    false
+
+
+
+
+
+
+;------------------------------------------------------
+;
+;       ping
+;
+;------------------------------------------------------
+
+
+  assume ds:codseg
+
+
+ktest0_start:
+
+
+
+
+
+
+  mov   ecx,1000
+  DO
+        push  ecx
+        sub   esi,esi
+        int   thread_switch
+        pop   ecx
+        dec   ecx
+        REPEATNZ
+  OD
+  mov   ds:[ktest0_ready],true
+          
+
+ 
+
+
+
+  
+  mov   eax,0AA00010h + ((3*64/4*2+64/4) SHL 8)
+  mov   ebx,0FFFFFFFFh
+  mov   esi,sigma0_task
+  mov   edi,root_chief
+  int   thread_schedule
+
+
+  mov   eax,0AA00010h  + ((1*64/4*2+64/4) SHL 8)
+  mov   ebx,0FFFFFFFFh
+  mov   esi,pong_thread
+  mov   edi,root_chief
+  int   thread_schedule
+
+  mov   eax,0AA00010h  + ((2*64/4*2+64/4) SHL 8)
+  mov   ebx,0FFFFFFFFh
+  mov   esi,ping_thread
+  mov   edi,root_chief
+  int   thread_schedule
+
+matrix_a      equ   (MB1)
+matrix_b      equ   (matrix_a+MB16)
+
+  DO
+  
+        ke    'xx'
+        
+        finit
+        
+        kd____disp <13,10,'matrix: '>
+     ;   kd____inhex16
+        
+        mov   eax,64
+        
+        mov   ecx,eax
+        kd____disp <'  '>
+        kd____outdec
+        kd____disp <'x'>
+        kd____outdec
+                
+        mov   edi,matrix_a
+        call  gen_matrix
+        
+        mov   edi,matrix_b
+        call  gen_matrix
+        
+        cli
+        
+        mov   ds:[ktest1_ready],false
+        
+        pushad
+        DO
+              mov   esi,pong_thread
+              int   thread_switch
+              cmp   ds:[ktest1_ready],true
+              REPEATNZ
+        OD
+        popad      
+
+        rdtsc
+        mov   ds:[cycles],eax
+                
+        mov   esi,matrix_a
+        mov   edi,matrix_b
+        call  mul_matrix
+        
+        kd____disp <'  cycles: '>
+        rdtsc
+        sub   eax,13
+        sub   eax,ds:[cycles]
+        mov   ebx,eax
+        kd____outdec
+        kd____disp <'  ('>
+        mov   eax,ecx
+        imul  ecx
+        imul  ecx
+        xchg  eax,ebx
+        call  outdec2
+        kd____disp <' cycles/iteration)'>
+        
+        
+  
+        REPEAT
+  OD
+
+
+        align 16
+        
+std_value     dq    1.0
+fzero         dq    0.0
+result        dq    0.0
+
+cycles        dd    0
+
+
+
+gen_matrix:
+
+  push  ecx
+  push  edi
+  
+  mov   eax,ecx
+  imul  ecx
+  DO
+        mov   ebx,dword ptr ds:[std_value]
+        mov   ecx,dword ptr ds:[std_value+4]
+        mov   [edi],ebx
+        mov   [edi+4],ecx
+        add   edi,8
+        dec   eax
+        REPEATNZ
+  OD
+  
+  pop   edi
+  pop   ecx
+  ret
+  
+  
+  
+mul_matrix:
+
+  mov   ebp,ecx
+
+  push  ecx
+  push  esi
+  push  edi
+  
+  DO
+        push  ecx
+        push  esi
+        push  edi
+        
+        mov   ecx,ebp 
+        DO
+              push  ecx
+              mov   ecx,ebp
+              fld   qword ptr ds:[fzero]
+              jmp   short xx
+              
+              DO
+                    faddp st(1),st
+                xx: 
+                    fld   qword ptr [ecx*8+esi-8]
+                    fmul  qword ptr [ecx*8+edi-8]
+                    fld   qword ptr [ecx*8+esi-16]
+                    fmul  qword ptr [ecx*8+edi-16]
+                    fxch  st(1)
+                    faddp st(2),st
+                    fld   qword ptr [ecx*8+esi-24]
+                    fmul  qword ptr [ecx*8+edi-24]
+                    fxch  st(1)
+                    faddp st(2),st
+                    fld   qword ptr [ecx*8+esi-32]
+                    fmul  qword ptr [ecx*8+edi-32]
+                    fxch  st(1)
+                    faddp st(2),st
+                    
+                    sub   ecx,4
+                    REPEATNZ
+              OD
+              faddp st(1),st
+              fstp  qword ptr ds:[result]
+        
+              rdtsc
+              sub   eax,13
+              sub   ds:[cycles],eax
+              
+              pushad
+              mov   esi,pong_thread
+              int   thread_switch
+              popad
+              
+              rdtsc
+              add   ds:[cycles],eax
+              
+              pop   ecx
+              lea   edi,[ebp*8+edi]                       
+              dec   ecx
+              REPEATNZ
+        OD
+        
+        pop   edi
+        pop   esi
+        pop   ecx
+                
+        lea   esi,[ebp*8+esi]
+        dec   ecx
+        REPEATNZ
+  OD
+  
+  pop   edi
+  pop   esi
+  pop   ecx
+  ret        
+         
+
+  
+
+
+outdec2:
+
+  pushad
+
+  sub   edx,edx
+  div   ebx
+  kd____outdec
+  mov   al,'.'
+  kd____outchar
+  imul  eax,edx,200
+  add   eax,ebx
+  shr   eax,1
+  sub   edx,edx
+  div   ebx
+  mov   edx,eax
+  IFB_  edx,10
+        mov   al,'0'
+        kd____outchar
+  FI
+  mov   eax,edx
+  kd____outdec
+
+  popad
+  ret
+
+
+
+
+
+;------------------------------------------------------
+;
+;       pong
+;
+;------------------------------------------------------
+
+
+ktest1_start:
+
+  DO
+        sub   esi,esi
+        int   thread_switch
+        cmp   ds:[ktest0_ready],true
+        REPEATNZ
+  OD
+        
+        mov   edi,MB1
+        mov   ecx,KB16/4
+        DO
+              mov   eax,[edi]
+              add   edi,32
+              sub   ecx,32/4
+              REPEATA
+        OD
+        mov   edi,MB1+MB16
+        mov   ecx,KB16/4
+        DO
+              mov   eax,[edi]
+              add   edi,32
+              sub   ecx,32/4
+              REPEATA
+        OD      
+
+
+  cli
+  DO                    
+        mov   edi,MB1
+        mov   ecx,KB16/4
+        DO
+              mov   eax,[edi]
+              add   edi,32
+              sub   ecx,32/4
+              REPEATA
+        OD
+        mov   edi,MB1+MB16
+        mov   ecx,KB16/4
+        DO
+              mov   eax,[edi]
+              add   edi,32
+              sub   ecx,32/4
+              REPEATA
+        OD      
+        
+        mov   ds:[ktest1_ready],true
+        
+        mov   esi,ping_thread
+        int   thread_switch
+        REPEAT
+  OD        
+ 
+ 
+ 
+
+
+
+
+
+timer_counter        equ 40h
+timer_control        equ 43h
+
+counter0_mode0_16_cmd   equ 00110000b
+counter0_mode2_16_cmd   equ 00110100b
+counter0_mode3_16_cmd   equ 00110110b
+counter0_latch_cmd      equ 00000000b
+
+
+
+
+timer_start macro
+
+mov al,counter0_mode0_16_cmd
+out [timer_control],al
+jmp $+2
+jmp $+2
+mov al,0FFh
+out [timer_counter],al
+jmp $+2
+jmp $+2
+out [timer_counter],al
+endm
+
+
+
+timer_stop macro
+
+mov al,counter0_latch_cmd
+out [timer_control],al
+jmp $+2
+jmp $+2
+in  al,[timer_counter]
+mov ah,al
+jmp $+2
+jmp $+2
+in  al,[timer_counter]
+xchg ah,al
+neg  ax
+movzx eax,ax
+lea  eax,[eax+eax-1]
+imul eax,(1000*1000/1193)/2
+endm
+
+
+  align 16
+
+
+
+microseconds:
+
+  pushad
+
+  sub   edx,edx
+  div   ebx
+  kd____outdec
+  mov   al,'.'
+  kd____outchar
+  imul  eax,edx,200
+  add   eax,ebx
+  shr   eax,1
+  sub   edx,edx
+  div   ebx
+  mov   edx,eax
+  IFB_  edx,10
+        mov   al,'0'
+        kd____outchar
+  FI
+  mov   eax,edx
+  kd____outdec
+  kd____disp  <' us'>
+
+  popad
+  ret
+
+
+
+
+
+
+;----------------------------------------------------------------------------
+;
+;       get real time clock
+;
+;----------------------------------------------------------------------------
+; POSTCONDITION:
+;
+;       EAX    ms (low)
+;
+;----------------------------------------------------------------------------
+
+        align 16
+
+
+get_rtc:
+
+  mov   eax,ds:[user_clock+1000h]
+  ret
+
+
+
+
+
+
+
+
+
+ktest_end     equ $
+
+
+  scod  ends
+
+  code  ends
+  end

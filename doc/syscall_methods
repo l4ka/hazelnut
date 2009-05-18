@@ -1,0 +1,250 @@
+/********************************
+* Prefetch_Abort Syscall Method *
+********************************/
+
+/***************************************
+*              Stack Frame             *
+****************************************
+*   IAbort   *  Syscall   *   Other    *
+****************************************
+*    SPSR    *    SPSR    *      ~     *<- Top TCB (start of kstack) 
+* a_lr -> pc *     ~      *      ~     *
+*    u_lr    * u_lr -> pc *      ~     *
+*    u_sp    *    u_sp    *      ~     *<- a_sp when in user mode
+*    r12     *     #2     * o_lr -> pc *
+*    r11     *     ~      *    u-lr    *
+*    ...     *    ...     *    u_sp    *
+*    ...     *    ...     *    r12     *
+*    ...     *    ...     *    r11     *
+*    ...     *    ...     *    ...     *
+*    ...     *    ...     *     r0     *
+*     r0     *    ...     *    SPSR    *
+*     #1     *     ~      *     #4     *
+***************************************/
+
+The immediate at the top of the stack specifies the stack layout.
+
+/* Reset Entry Point 0x0
+************************/
+        nop                     @ Not relavent since mmu disabled
+        ...
+
+/* Undefined Entry Point 0x4
+****************************/
+        b       undefined_entry @ Jump to Undefined Instruction entry
+        ...
+
+// stack user state
+undefined_entry:
+	ldr	sp, #current_thread_sp		@ load current threads stack
+	str	lr, [sp, #-4]!			@ Stack ud_lr
+	stmdb	sp, {r0 - 14}^			@ Stack user registers
+	msr	spsr, lr			@ Move SPSR to un_lr
+	str	lr, [sp, #60]!			@ Stack User CPSR
+	mov	lr, #(ABORT_MODE | IRQ_MASK)	@ Load now CPSR value
+	mrs	cpsr, lr			@ Change to abort mode
+	<undefined handler code>
+
+// undefined_exit is an IPC exit since a exception IPC is generated or the 
+// thread is kill.
+
+/* SWI Entry Point at 0x8
+*************************/
+	b	swi_entry	@ Jump to SWI entry
+	...
+
+// swi_entry is same as undefined since its an undefined instruction expecption
+
+/* Prefetch Abort Entry Point 0xC
+*********************************/
+	b	prefetch_abort_entry	@ Jump to prefetch abort entry
+	...
+
+// dispatch
+prefetch_abort_entry:
+#ifdef EXCEPTION_VECTOR_RELOCATED
+	mvn	lr, lr			@ Value is negative of syscall #
+#endif
+	stmia	sp, {sp, lr}^		@ Stack User sp, lr (pc after syscall)
+	cmp	lr, #SYSCALL_LIMIT	@ Range Check
+	addlt	pc, pc, lr, lsl #3	@ Jump to relavent point
+prefetch_abort:				@ a_lr >= SYSCALL_LIMIT
+#ifdef EXCEPTION_VECTOR_RELOCATED
+	mvn	lr, lr		@ Not a syscall so restore a_lr
+#endif
+	sub	lr, lr, #4	@ Ajust a_lr for return pc value
+	str	lr, [sp, #8]	@ Stack a_lr 
+	msr	spsr, lr	@ move SPSR to a_lr
+	str	lr, [sp, #12]	@ Stack user CPSR 
+	strdb	sp!, {r0-r12}	@ Stack rest of user registers
+ 	...			@ next 4/5 instructions of prefetch_abort
+	b	prefetch_abort_rest
+ipc_entry:				@ a_lr = 0x4, ipc
+	<Syscall Entry Code>            @ next 6 instructions of ipc_entry
+	b	ipc_rest
+	nop				@ dummy
+
+// Syscall entry, ie ipc_entry
+<Syscall Entry Label>
+	msr	spsr, lr	@ move SPSR to a_lr
+	str	lr, [sp, #12]	@ Stack SPSR
+	<Syscall code>
+
+// Syscall exit (sp points to kstack of whatever thread we are returnning to)
+// Arguments already in relavent regs */
+<Syscall Exit Label>
+	ldr	lr, [sp, #12]	@ Unstack User CPSR to a_lr
+	msc	lr, spsr	@ Move User CPSR to SPSR
+	ldmia	sp, {sp, pc}^	@ Restore User CPSR/sp, pc
+
+// prefetch abort exit
+prefetch_exit:
+	ldmia	sp!, {r0-r12}		@ Unstack rest registers
+	ldr	lr, [sp, #12]		@ Unstack User CPSR to a_lr
+	msc	lr, spsr		@ Move User CPSR to SPSR
+	ldmia	sp, {sp, lr, pc}^	@ Restore User CPSR/sp/lr, pc
+
+/* Data Abort Entry Point at 0xC
+********************************/
+        b       data_abort_entry		@ Jump to data abort entry
+        ...
+
+data_abort_entry:
+        str     lr, [sp, #-4]!                  @ Stack ud_lr
+        stmdb   sp, {r0 - 14}^                  @ Stack user registers
+        msr     spsr, lr                        @ Move SPSR to un_lr
+        str     lr, [sp, #60]!                  @ Stack User CPSR
+        <data_abort code>
+
+// data_abort_exit is an IPC exit since a pager IPC is generated or the thread
+//  is kill.
+
+/* Unused Entry Point at 0x14
+*****************************/
+	nop	@ Not relevent (reserved)
+	...
+
+/* IRQ Entry Point at 0x18
+**************************/
+	b	irq_entry	@ Jump to IRQ entry
+
+// irq_entry same as undefined_entry since IRQ result in an IPC
+// irq_exit is either IPC exit or a thread switch (possibly a debug int which
+// is similar to a thread switch except the interrupted thread is restored
+
+/* FIQ Entry Point at 0x1C
+**************************/
+fiq_entry:
+
+// FIXUP, need to decide weather we interrupted user or kernel. if user its 
+// the same as irq. If kernel we have to a little magic.
+
+// fiq_entry is the same as irq_entry but can start straight away without a 
+// branch
+
+// Note: where we can assign IRQ or FIQ to a interrupt source kernel timer and
+// debugging interrupts are FIQ so they can interrupt at any time and it 
+// seperates the handlers. Otherwise they have a common code base.
+
+/********************************
+* SWI + Register Syscall Method *
+********************************/
+
+/****************************
+*        Stack Frame        *
+*****************************
+*    Other    *   Syscall   *
+*****************************<- start of next TCB (start of kstack)
+*  p_lr -> pc * sv_lr -> pc *
+*     u_lr    *     u_lr    *
+*     u_sp    *     u_sp    *
+*     r12     *     SPSR    *
+*     r11     *      ~      *
+*     ...     *      ~      *
+*      r0     *     ...     *
+*     SPSR    *      ~      *
+****************************/
+
+/* Reset Entry point 0x0
+************************/
+	nop			@ Not relavent since mmu disabled
+	...
+
+/* Undefined Entry Point 0x4
+****************************/
+	b	undefined_entry	@ Jump to Undefined Instruction entry
+
+undefined_entry:
+	ldr	sp, #current_thread_sp	@ Load ud_sp
+	str     lr, [sp, #-4]!		@ Stack ud_lr (pc after exception)
+	stmdb	sp, {r0 - r14}^		@ Stack registers
+	msr     spsr, lr		@ Move SPSR to ud_lr
+	str     lr, [sp, #-64]!		@ Stack SPSR
+	<undefined handler code>
+
+// Undefined will exit in a ipc. So ipc_exit will be used
+
+/* SWI Entry point 0x8
+**********************/
+        b      swi_entry	@ Jump to SWI entry
+        ...
+
+/* dispatch */
+swi_entry:
+	ldr	sp, #current_thread_sp	@ Load sv_sp
+	str	lr, [sp, #-4]!		@ Stack sv_lr (pc after syscall)
+        stmdb   sp, {sp, lr}^		@ Stack u_sp, u_lr
+        msr     spsr, lr		@ Move SPSR to lr
+        str     lr, [sp, #-12]!		@ Stack SPSR
+        cmp     r0, #SYSCALL_LIMIT	@ Range Check
+        addlt   pc, pc, r0, lsl #2	@ Jump to relavent Jump point
+        b       invalid_swi		@ Syscall # >= SYSCALL_LIMIT
+ipc_entry:				@ Syscall = 0, ipc
+	...				@ First 6 ipc intructions
+	b	ipc_rest		@ Branch to rest of ipc code
+	nop				@ Dummy to avoid cache stall on SA's
+id_nearest:				@ Syscall = 1, id_nearest
+	...				@ ...
+
+/* Syscall exit (sp points to kstack of whatever thread we are returnning to)
+ * Arguments already in relavent regs */
+// If we switched threads
+	ldr	lr, <new thread sp>	@ load sp of new thread
+	str	lr, #current_thread_sp	@ store in kernel data
+// If same thread we start here
+        ldr     lr, [sp], #4		@ Unstrack SPSR to sv_lr
+        msc     lr, spsr		@ load SPSR
+        ldmia   sp, {sp, lr, pc}^	@ Restore CPSR, sp, lr, pc
+
+/* Prefetch Abort Entry point 0xC
+*********************************/
+        b       prefetch_abort_entry
+        ...
+
+// Same as undefined
+
+/* Data Abort Entry Point at 0xC
+********************************/
+        b       data_abort_entry        @ Jump to data abort entry
+        ...
+
+// Same as undefined
+
+/* Unused Entry Point at 0x14
+*****************************/
+        nop     @ Not relevent (reserved)
+        ...
+
+/* IRQ Entry Point at 0x18
+**************************/
+        b       irq_entry       @ Jump to IRQ entry
+        ...
+
+// Same as undefined
+
+/* FIQ Entry Point at 0x1C
+**************************/
+fiq_entry:
+
+// Same as undefined with the constraint of the prefetch syscall method
+// fiq entry point. 

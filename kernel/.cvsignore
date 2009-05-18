@@ -1,0 +1,4 @@
+*-kernel
+*-kernel.stripped
+Makeconf.local
+*.ii *.s

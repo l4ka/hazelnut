@@ -1,0 +1,1167 @@
+# FILE: header.tk
+# This file is boilerplate TCL/TK function definitions for 'make xconfig'.
+#
+# CHANGES
+# =======
+#
+# 8 January 1999, Michael Elizabeth Chastain, <mec@shout.net>
+# - Remove unused do_cmd function (part of the 2.0 sound support).
+# - Arrange buttons in three columns for better screen fitting.
+# - Add CONSTANT_Y, CONSTANT_M, CONSTANT_N for commands like:
+#     dep_tristate 'foo' CONFIG_FOO m
+#
+# 23 January 1999, Michael Elizabeth Chastain, <mec@shout.net>
+# - Shut vfix the hell up.
+#
+# 24 January 1999, Michael Elizabeth Chastain, <mec@shout.net>
+# - Improve the exit message (Jeff Ronne).
+
+#
+# This is a handy replacement for ".widget cget" that requires neither tk4
+# nor additional source code uglification.
+#
+proc cget { w option } {
+	return "[lindex [$w configure $option] 4]"
+}
+
+#
+# Function to compensate for broken config.in scripts like the sound driver,
+# which make dependencies on variables that are never even conditionally
+# defined.
+#
+proc vfix { var } {
+	global $var
+	if [ catch {eval concat $$var} ] {
+		set $var 0
+	}
+}
+
+#
+# Constant values used by certain dep_tristate commands.
+#
+set CONSTANT_Y 1
+set CONSTANT_M 2
+set CONSTANT_N 0
+
+#
+# Create a "reference" object to steal colors from.
+#
+button .ref
+
+#
+# On monochrome displays, -disabledforeground is blank by default; that's
+# bad.  Fill it with -foreground instead.
+#
+if { [cget .ref -disabledforeground] == "" } {
+	.ref configure -disabledforeground [cget .ref -foreground]
+}
+
+
+#
+# Define some macros we will need to parse the config.in file.
+#
+
+proc mainmenu_name { text } {
+	wm title . "$text"
+}
+
+proc menu_option { w menu_num text } {
+	global menus_per_column
+#	if { $menu_num <= $menus_per_column } then {
+#	    set myframe left
+#	} elseif { $menu_num <= [expr 2 * $menus_per_column] } then {
+#	    set myframe middle
+#	} else {
+#	    set myframe right
+#	} 
+	if { $menu_num <= 6 } then {
+	    set myframe arch
+	} elseif { $menu_num <= [expr 2 * $menus_per_column] } then {
+	    set myframe apps
+	} else {
+	    set myframe control
+	} 
+	button .f0.x$menu_num -anchor w -text "$text" \
+	    -command "$w .$w \"$text\""
+	pack .f0.x$menu_num -pady 0 -side top -fill x -in .f0.$myframe
+}
+
+proc load_configfile { w title func } {
+	catch {destroy $w}
+	toplevel $w -class Dialog
+	global loadfile
+	frame $w.x
+	label $w.bm -bitmap questhead
+	pack  $w.bm -pady 10 -side top -padx 10
+	label $w.x.l -text "Enter filename:" -relief raised
+	entry $w.x.x -width 35 -relief sunken -borderwidth 2 \
+		-textvariable loadfile
+	pack $w.x.l $w.x.x -anchor w -side left
+	pack $w.x -side top -pady 10
+	wm title $w "$title" 
+
+	set oldFocus [focus]
+	frame $w.f
+	button $w.f.back -text "OK" -width 20 \
+		-command "destroy $w; focus $oldFocus;$func .fileio"
+	button $w.f.canc -text "Cancel" \
+		-width 20 -command "destroy $w; focus $oldFocus"
+	pack $w.f.back $w.f.canc -side left -pady 10 -padx 45
+	pack $w.f -pady 10 -side bottom -padx 10 -anchor w
+	focus $w
+	global winx; global winy
+	set winx [expr [winfo x .]+30]; set winy [expr [winfo y .]+30]
+	wm geometry $w +$winx+$winy
+}
+
+proc maybe_exit { w } {
+	catch {destroy $w}
+	toplevel $w -class Dialog
+	label $w.bm -bitmap questhead
+	pack  $w.bm -pady 10 -side top -padx 10
+	message $w.m -width 400 -aspect 300 \
+		-text "Changes will be lost.  Are you sure?" -relief flat
+	pack  $w.m -pady 10 -side top -padx 10
+	wm title $w "Are you sure?" 
+
+	set oldFocus [focus]
+	frame $w.f
+	button $w.f.back -text "OK" -width 20 \
+		-command "exit"
+	button $w.f.canc -text "Cancel" \
+		-width 20 -command "destroy $w; focus $oldFocus"
+	pack $w.f.back $w.f.canc -side left -pady 10 -padx 45
+	pack $w.f -pady 10 -side bottom -padx 10 -anchor w
+	focus $w
+	global winx; global winy
+	set winx [expr [winfo x .]+30]; set winy [expr [winfo y .]+30]
+	wm geometry $w +$winx+$winy
+}
+
+proc read_config_file { w } {
+	global loadfile
+	if { [string length $loadfile] != 0 && [file readable $loadfile] == 1 } then {
+		read_config $loadfile
+	} else {
+		catch {destroy $w}
+		toplevel $w -class Dialog
+		message $w.m -width 400 -aspect 300 -text \
+			"Unable to read file $loadfile" \
+			 -relief raised 
+		label $w.bm -bitmap error
+		pack $w.bm $w.m -pady 10 -side top -padx 10
+		wm title $w "Xconfig Internal Error" 
+
+		set oldFocus [focus]
+		frame $w.f
+		button $w.f.back -text "Bummer" \
+			-width 10 -command "destroy $w; focus $oldFocus"
+		pack $w.f.back -side bottom -pady 10 -anchor s
+		pack $w.f -pady 10 -side top -padx 10 -anchor s
+		focus $w
+		global winx; global winy
+		set winx [expr [winfo x .]+30]; set winy [expr [winfo y .]+30]
+		wm geometry $w +$winx+$winy
+	}
+}
+
+proc write_config_file  { w } {
+	global loadfile
+	if { [string length $loadfile] != 0 
+    		&& ([file writable $loadfile] == 1 || ([file exists $loadfile] == 0 && [file writable [file dirname $loadfile]] == 1)) } then {
+		writeconfig $loadfile /dev/null
+	} else {
+		catch {destroy $w}
+		toplevel $w -class Dialog
+		message $w.m -width 400 -aspect 300 -text \
+			"Unable to write file $loadfile" \
+			 -relief raised 
+		label $w.bm -bitmap error
+		pack $w.bm $w.m -pady 10 -side top -padx 10
+		wm title $w "Xconfig Internal Error" 
+
+		set oldFocus [focus]
+		frame $w.f
+		button $w.f.back -text "OK" \
+			-width 10 -command "destroy $w; focus $oldFocus"
+		pack $w.f.back -side bottom -pady 10 -anchor s
+		pack $w.f -pady 10 -side top -padx 10 -anchor s
+		focus $w
+		global winx; global winy
+		set winx [expr [winfo x .]+30]; set winy [expr [winfo y .]+30]
+		wm geometry $w +$winx+$winy
+	}
+}
+
+proc read_config { filename } {
+	set file1 [open $filename r]
+	clear_choices
+	while { [gets $file1 line] >= 0} {
+		if [regexp {([0-9A-Za-z_]+)=([ynm])} $line foo var value] {
+			if { $value == "y" } then { set cmd "global $var; set $var 1" }
+			if { $value == "n" } then { set cmd "global $var; set $var 0" }
+			if { $value == "m" } then { set cmd "global $var; set $var 2" }
+			eval $cmd
+		}
+		if [regexp {# ([0-9A-Za-z_]+) is not set} $line foo var] {
+			set cmd "global $var; set $var 0"
+			eval $cmd
+		}
+		if [regexp {([0-9A-Za-z_]+)=([0-9A-Fa-f]+)} $line foo var value] {
+			set cmd "global $var; set $var $value"
+			eval $cmd
+		}
+		if [regexp {([0-9A-Za-z_]+)="([^"]*)"} $line foo var value] {
+			set cmd "global $var; set $var \"$value\""
+			eval $cmd
+		}
+	}
+	close $file1
+	update_choices
+	update_mainmenu .rdupd
+}
+proc write_comment { file1 file2 text } {
+    	puts $file1 ""
+	puts $file1 "#"
+	puts $file1 "# $text"
+	puts $file1 "#"
+	puts $file2 "/*"
+	puts $file2 " * $text"
+	puts $file2 " */"
+}
+
+proc write_tristate { file1 file2 varname variable dep } {
+	if { $variable == 0 } \
+		then { puts $file1 "$varname=n"; } \
+	elseif { $variable == 1 && $dep == 0 } \
+		then { puts $file1 "$varname=y"; } \
+	elseif { $variable == 1 && $dep == 1 } \
+		then { puts $file1 "$varname=y"; \
+		       puts $file2 "#define $varname 1" } \
+	else { \
+	    puts stdout "ERROR - Attempting to write value for unconfigured variable ($varname)." \
+	}
+}
+
+#proc write_tristate { file1 file2 varname variable dep } {
+#	if { $variable == 0 } \
+#		then { puts $file1 "# $varname is not set"; \
+#		       puts $file2 "#undef  $varname"} \
+#	elseif { $variable == 2 || ($dep == 2 && $variable == 1) } \
+#		then { puts $file1 "$varname=m"; \
+#		       puts $file2 "#undef  $varname"; \
+#		       puts $file2 "#define ${varname}_MODULE 1" } \
+#	elseif { $variable == 1 && $dep != 2 } \
+#		then { puts $file1 "$varname=y"; \
+#		       puts $file2 "#define $varname 1" } \
+#	else { \
+#	    puts stdout "ERROR - Attempting to write value for unconfigured variable ($varname)." \
+#	}
+#}
+
+proc write_int { file1 file2 varname variable dep } {
+	if { $dep == 0 } \
+		then { puts $file1 "# $varname is not set"; \
+		       puts $file2 "#undef  $varname"} \
+	else {
+		puts $file1 "$varname=$variable"; \
+		puts $file2 "#define $varname $variable"; \
+	}
+}
+
+proc write_hex { file1 file2 varname variable dep } {
+	if { $dep == 0 } \
+		then { puts $file1 "# $varname is not set"; \
+		       puts $file2 "#undef  $varname"} \
+	else {
+		puts $file1 "$varname=$variable"; \
+		puts $file2 "#define $varname 0x$variable"; \
+	}
+}
+
+proc write_string { file1 file2 varname variable dep } {
+	if { $dep == 0 } \
+		then { puts $file1 "# $varname is not set"; \
+		       puts $file2 "#undef  $varname"} \
+	else {
+		puts $file1 "$varname=\"$variable\""; \
+		puts $file2 "#define $varname \"$variable\""; \
+	}
+}
+
+proc option_name {w mnum line text helpidx} {
+	button $w.x$line.l -text "$text" -relief groove -anchor w
+	$w.x$line.l configure -activefore [cget $w.x$line.l -fg] \
+				-activeback [cget $w.x$line.l -bg]
+	button $w.x$line.help -text "Help" -relief raised \
+		-command "dohelp .dohelp $helpidx"
+	pack $w.x$line.help -side right -fill y
+	pack $w.x$line.l -side right -fill both -expand on
+}
+
+proc toggle_switch2 {w mnum line text variable} {
+	frame $w.x$line -relief sunken
+	radiobutton $w.x$line.y -text "y" -variable $variable -value 1 \
+		-relief groove -width 2 -command "update_menu$mnum .menu$mnum"
+	radiobutton $w.x$line.m -text "-"  -variable $variable -value 2 \
+		-relief groove -width 2 -command "update_menu$mnum .menu$mnum"
+	radiobutton $w.x$line.n -text "n"  -variable $variable -value 0 \
+		-relief groove -width 2 -command "update_menu$mnum .menu$mnum"
+		
+	option_name $w $mnum $line $text $variable
+		
+	pack $w.x$line.n $w.x$line.m $w.x$line.y -side right -fill y
+}
+
+proc toggle_switch3 {w mnum line text variable} {
+	frame $w.x$line -relief sunken
+	radiobutton $w.x$line.y -text "y" -variable $variable -value 1 \
+		-relief groove -width 2 -command "update_menu$mnum .menu$mnum"
+	radiobutton $w.x$line.m -text "m"  -variable $variable -value 2 \
+		-relief groove -width 2 -command "update_menu$mnum .menu$mnum"
+	radiobutton $w.x$line.n -text "n"  -variable $variable -value 0 \
+		-relief groove -width 2 -command "update_menu$mnum .menu$mnum"
+		
+	option_name $w $mnum $line $text $variable
+		
+	global CONFIG_MODULES
+	if {($CONFIG_MODULES == 0)} then {
+		$w.x$line.m configure -state disabled
+	}
+	pack $w.x$line.n $w.x$line.m $w.x$line.y -side right -fill y
+}
+
+proc bool {w mnum line text variable} {
+	toggle_switch2 $w $mnum $line $text $variable
+	$w.x$line.m configure -state disabled
+	pack $w.x$line -anchor w -fill both -expand on
+}
+
+proc tristate {w mnum line text variable } {
+	toggle_switch3 $w $mnum $line $text $variable
+	pack $w.x$line -anchor w -fill both -expand on
+}
+
+proc dep_tristate {w mnum line text variable depend } {
+	tristate $w $mnum $line $text $variable
+}
+
+proc int { w mnum line text variable } {
+	frame $w.x$line
+	entry $w.x$line.x -width 18 -relief sunken -borderwidth 2 \
+		-textvariable $variable
+	option_name $w $mnum $line $text $variable
+	pack $w.x$line.x -anchor w -side right -fill y
+	pack $w.x$line -anchor w -fill both -expand on
+}
+
+proc hex { w mnum line text variable } {
+	int $w $mnum $line $text $variable
+}
+
+proc istring { w mnum line text variable } {
+	frame $w.x$line
+	entry $w.x$line.x -width 18 -relief sunken -borderwidth 2 \
+		-textvariable $variable
+	option_name $w $mnum $line $text $variable
+	pack $w.x$line.x -anchor w -side right -fill y
+	pack $w.x$line -anchor w -fill both -expand on
+}
+
+proc minimenu { w mnum line text variable helpidx } {
+	frame $w.x$line
+	menubutton $w.x$line.x -textvariable $variable -menu \
+		$w.x$line.x.menu -relief raised \
+		-anchor w
+	option_name $w $mnum $line $text $helpidx
+	pack $w.x$line.x -anchor w -side right -fill y
+	pack $w.x$line -anchor w -fill both -expand on
+}
+
+proc comment {w line text } {
+#nothing done for comments now.
+}
+
+proc dohelp {w var }  {
+	catch {destroy $w}
+	toplevel $w -class Dialog
+
+	set filefound 0
+	set found 0
+	set lineno 0
+
+	if { [file readable config.help] == 1} then {
+		set filefound 1
+		# First escape sed regexp special characters in var:
+		set var [exec echo "$var" | sed s/\[\]\[\/.^$*\]/\\\\&/g]
+		# Now pick out right help text:
+		set message [exec sed -n "
+			/^$var\[ 	\]*\$/,\${
+				/^$var\[ 	\]*\$/c\\
+${var}:\\
+
+				/^#/b
+				/^\[^ 	\]/q
+				s/^  //
+				p
+			}
+			" config.help]
+		set found [expr [string length "$message"] > 0]
+	}
+	
+	frame $w.f1
+
+	if { $found == 0 } then {
+		if { $filefound == 0 } then {
+		message $w.f1.m -width 750 -aspect 300 -relief flat -text \
+			"No help available - unable to open file config.help.  This file should have come with your kernel."
+		} else {
+		message $w.f1.m -width 400 -aspect 300 -relief flat -text \
+			"No help available for $var"
+		}
+		label $w.f1.bm -bitmap error
+		wm title $w "RTFM"
+	} else {
+		text $w.f1.m -width 73 -relief flat -wrap word
+		$w.f1.m insert 0.0 $message
+		$w.f1.m conf -state disabled  -height [$w.f1.m index end]
+
+		label $w.f1.bm -bitmap info
+		wm title $w "Configuration help" 
+	}
+	pack $w.f1.bm $w.f1.m -side left -padx 10
+	pack $w.f1 -side top
+	set oldFocus [focus]
+	
+	# Do the OK button
+	#
+	frame $w.f2
+	button $w.f2.ok -text "OK" \
+		-width 10 -command "destroy $w; focus $oldFocus"
+	pack $w.f2.ok -side bottom -pady 6 -anchor n
+	pack $w.f2 -side bottom -padx 10 -anchor s
+
+	# Finish off the window
+	#
+	focus $w
+	global winx; global winy
+	set winx [expr [winfo x .]+30]; set winy [expr [winfo y .]+30]
+	wm geometry $w +$winx+$winy
+}
+
+proc wrapup {w }  {
+	catch {destroy $w}
+	toplevel $w -class Dialog
+
+	message $w.m -width 400 -aspect 300 -relief raised -justify center -text  \
+		"Check the top-level Makefile for additional configuration."
+
+	label $w.bm -bitmap info
+	pack $w.bm $w.m -pady 10 -side top -padx 10
+	wm title $w "End of L4/KA kernel configuration." 
+
+	set oldFocus [focus]
+	frame $w.f
+	button $w.f.back -text "OK" \
+		-width 10 -command "exit"
+	pack $w.f.back -side bottom -pady 10 -anchor s
+	pack $w.f -pady 10 -side top -padx 10 -anchor s
+	focus $w
+	global winx; global winy
+	set winx [expr [winfo x .]+30]; set winy [expr [winfo y .]+30]
+	wm geometry $w +$winx+$winy
+
+}
+
+#
+# Next set up the particulars for the top level menu, and define a few
+# buttons which we will stick down at the bottom.
+#
+
+frame .f0 
+frame .f0.arch
+frame .f0.apps
+frame .f0.control
+
+set menus_per_column 3
+
+mainmenu_name "L4/KA Userland Configuration"
+menu_option menu1 1 "Architecture"
+proc menu1 {w title} {
+	catch {destroy $w}
+	toplevel $w -class Dialog
+	wm withdraw $w
+	message $w.m -width 400 -aspect 300 -text \
+		"Architecture"  -relief raised
+	pack $w.m -pady 10 -side top -padx 10
+	wm title $w "Architecture" 
+
+	set oldFocus [focus]
+	frame $w.f
+	button $w.f.back -text "Main Menu" \
+		-width 15 -command "destroy $w; focus $oldFocus; update_mainmenu $w"
+	button $w.f.next -text "Next" \
+		-width 15 -command " destroy $w; focus $oldFocus;  menu2 .menu2 \"$title\""
+	button $w.f.prev -text "Prev" \
+		-width 15 -command " destroy $w; focus $oldFocus; menu0 .menu0 \"$title\""
+	$w.f.prev configure -state disabled
+	pack $w.f.back $w.f.next $w.f.prev -side left -expand on
+	pack $w.f -pady 10 -side bottom -anchor w -fill x
+	frame $w.topline -relief ridge -borderwidth 2 -height 2
+	pack $w.topline -side top -fill x
+
+	frame $w.botline -relief ridge -borderwidth 2 -height 2
+	pack $w.botline -side bottom -fill x
+
+	frame $w.config
+	pack $w.config -fill y -expand on
+
+	scrollbar $w.config.vscroll -command "$w.config.canvas yview"
+	pack $w.config.vscroll -side right -fill y
+
+	canvas $w.config.canvas -height 1\
+		-relief flat -borderwidth 0 -yscrollcommand "$w.config.vscroll set" \
+		-width [expr [winfo screenwidth .] * 1 / 2] 
+	frame $w.config.f
+	pack $w.config.canvas -side right -fill y
+
+
+	global tmpvar_0
+	minimenu $w.config.f 1 0 "Major CPU Architecture" tmpvar_0 CONFIG_ARCH_ARM
+	menu $w.config.f.x0.x.menu
+	$w.config.f.x0.x.menu add radiobutton -label "arm" -variable tmpvar_0 -value "arm" -command "update_menu1 .menu1.config.f"
+	$w.config.f.x0.x.menu add radiobutton -label "x86" -variable tmpvar_0 -value "x86" -command "update_menu1 .menu1.config.f"
+	$w.config.f.x0.x.menu add radiobutton -label "mips" -variable tmpvar_0 -value "mips" -command "update_menu1 .menu1.config.f"
+	$w.config.f.x0.x.menu add radiobutton -label "superh" -variable tmpvar_0 -value "superh" -command "update_menu1 .menu1.config.f"
+	$w.config.f.x0.x.menu add radiobutton -label "m68k" -variable tmpvar_0 -value "m68k" -command "update_menu1 .menu1.config.f"
+	global tmpvar_1
+	minimenu $w.config.f 1 1 "ARM Board Type" tmpvar_1 CONFIG_ARCH_ARM_DNARD
+	menu $w.config.f.x1.x.menu
+	$w.config.f.x1.x.menu add radiobutton -label "DNARD" -variable tmpvar_1 -value "DNARD" -command "update_menu1 .menu1.config.f"
+	$w.config.f.x1.x.menu add radiobutton -label "Brutus" -variable tmpvar_1 -value "Brutus" -command "update_menu1 .menu1.config.f"
+	$w.config.f.x1.x.menu add radiobutton -label "PLEB" -variable tmpvar_1 -value "PLEB" -command "update_menu1 .menu1.config.f"
+	$w.config.f.x1.x.menu add radiobutton -label "IPaq" -variable tmpvar_1 -value "IPaq" -command "update_menu1 .menu1.config.f"
+	$w.config.f.x1.x.menu add radiobutton -label "EP7211" -variable tmpvar_1 -value "EP7211" -command "update_menu1 .menu1.config.f"
+	global tmpvar_2
+	minimenu $w.config.f 1 2 "x86 Model" tmpvar_2 CONFIG_ARCH_X86_I586
+	menu $w.config.f.x2.x.menu
+	$w.config.f.x2.x.menu add radiobutton -label "i586" -variable tmpvar_2 -value "i586" -command "update_menu1 .menu1.config.f"
+	global tmpvar_3
+	minimenu $w.config.f 1 3 "MIPS CPU Model" tmpvar_3 CONFIG_ARCH_MIPS_R4000
+	menu $w.config.f.x3.x.menu
+	$w.config.f.x3.x.menu add radiobutton -label "R4000" -variable tmpvar_3 -value "R4000" -command "update_menu1 .menu1.config.f"
+	global tmpvar_4
+	minimenu $w.config.f 1 4 "SuperH Model" tmpvar_4 CONFIG_ARCH_SH_EMU
+	menu $w.config.f.x4.x.menu
+	$w.config.f.x4.x.menu add radiobutton -label "Emulator" -variable tmpvar_4 -value "Emulator" -command "update_menu1 .menu1.config.f"
+	$w.config.f.x4.x.menu add radiobutton -label "SH3" -variable tmpvar_4 -value "SH3" -command "update_menu1 .menu1.config.f"
+	$w.config.f.x4.x.menu add radiobutton -label "SH4" -variable tmpvar_4 -value "SH4" -command "update_menu1 .menu1.config.f"
+	global tmpvar_5
+	minimenu $w.config.f 1 5 "m68k CPU Model" tmpvar_5 CONFIG_ARCH_M68K_DRAGONBALL
+	menu $w.config.f.x5.x.menu
+	$w.config.f.x5.x.menu add radiobutton -label "Dragonball" -variable tmpvar_5 -value "Dragonball" -command "update_menu1 .menu1.config.f"
+
+
+
+	focus $w
+	update_menu1 $w.config.f
+	global winx; global winy
+	set winx [expr [winfo x .]+30]; set winy [expr [winfo y .]+30]
+	wm geometry $w +$winx+$winy
+	update idletasks
+	$w.config.canvas create window 0 0 -anchor nw -window $w.config.f
+
+	$w.config.canvas configure \
+		-width [expr [winfo reqwidth $w.config.f] + 1]\
+		-scrollregion "-1 -1 [expr [winfo reqwidth $w.config.f] + 1] \
+			 [expr [winfo reqheight $w.config.f] + 1]"
+
+	set winy [expr [winfo reqh $w] - [winfo reqh $w.config.canvas]]
+	set scry [expr [winfo screenh $w] / 2]
+	set maxy [expr [winfo screenh $w] * 3 / 4]
+	set canvtotal [expr [winfo reqh $w.config.f] + 2]
+	if [expr $winy + $canvtotal < $maxy] {
+		$w.config.canvas configure -height $canvtotal
+	} else {
+		$w.config.canvas configure -height [expr $scry - $winy]
+	}
+	update idletasks
+	wm maxsize $w [winfo width $w] [winfo screenheight $w]
+	wm minsize $w [winfo width $w] 100
+
+	wm deiconify $w
+}
+
+
+proc update_menu1 {w}  {
+	update_define
+	global tmpvar_0; vfix tmpvar_0
+	global CONFIG_ARCH_ARM_DNARD; vfix CONFIG_ARCH_ARM_DNARD
+	if {($tmpvar_0 == "arm")} then { .menu1.config.f.x1.x configure -state normal} else { .menu1.config.f.x1.x configure -state disabled}
+	global CONFIG_ARCH_ARM_BRUTUS; vfix CONFIG_ARCH_ARM_BRUTUS
+	if {($tmpvar_0 == "arm")} then { .menu1.config.f.x1.x configure -state normal} else { .menu1.config.f.x1.x configure -state disabled}
+	global CONFIG_ARCH_ARM_PLEB; vfix CONFIG_ARCH_ARM_PLEB
+	if {($tmpvar_0 == "arm")} then { .menu1.config.f.x1.x configure -state normal} else { .menu1.config.f.x1.x configure -state disabled}
+	global CONFIG_ARCH_ARM_IPAQ; vfix CONFIG_ARCH_ARM_IPAQ
+	if {($tmpvar_0 == "arm")} then { .menu1.config.f.x1.x configure -state normal} else { .menu1.config.f.x1.x configure -state disabled}
+	global CONFIG_ARCH_ARM_EP7211; vfix CONFIG_ARCH_ARM_EP7211
+	if {($tmpvar_0 == "arm")} then { .menu1.config.f.x1.x configure -state normal} else { .menu1.config.f.x1.x configure -state disabled}
+	global CONFIG_ARCH_X86_I586; vfix CONFIG_ARCH_X86_I586
+	if {($tmpvar_0 == "x86")} then { .menu1.config.f.x2.x configure -state normal} else { .menu1.config.f.x2.x configure -state disabled}
+	global CONFIG_ARCH_MIPS_R4000; vfix CONFIG_ARCH_MIPS_R4000
+	if {($tmpvar_0 == "mips")} then { .menu1.config.f.x3.x configure -state normal} else { .menu1.config.f.x3.x configure -state disabled}
+	global CONFIG_ARCH_SH_EMU; vfix CONFIG_ARCH_SH_EMU
+	if {($tmpvar_0 == "superh")} then { .menu1.config.f.x4.x configure -state normal} else { .menu1.config.f.x4.x configure -state disabled}
+	global CONFIG_ARCH_SH_SH3; vfix CONFIG_ARCH_SH_SH3
+	if {($tmpvar_0 == "superh")} then { .menu1.config.f.x4.x configure -state normal} else { .menu1.config.f.x4.x configure -state disabled}
+	global CONFIG_ARCH_SH_SH4; vfix CONFIG_ARCH_SH_SH4
+	if {($tmpvar_0 == "superh")} then { .menu1.config.f.x4.x configure -state normal} else { .menu1.config.f.x4.x configure -state disabled}
+	global CONFIG_ARCH_M68K_DRAGONBALL; vfix CONFIG_ARCH_M68K_DRAGONBALL
+	if {($tmpvar_0 == "m68k")} then { .menu1.config.f.x5.x configure -state normal} else { .menu1.config.f.x5.x configure -state disabled}
+
+	update_mainmenu $w
+}
+
+
+menu_option menu2 2 "Kernel Configuration"
+proc menu2 {w title} {
+	catch {destroy $w}
+	toplevel $w -class Dialog
+	wm withdraw $w
+	message $w.m -width 400 -aspect 300 -text \
+		"Kernel Configuration"  -relief raised
+	pack $w.m -pady 10 -side top -padx 10
+	wm title $w "Kernel Configuration" 
+
+	set oldFocus [focus]
+	frame $w.f
+	button $w.f.back -text "Main Menu" \
+		-width 15 -command "destroy $w; focus $oldFocus; update_mainmenu $w"
+	button $w.f.next -text "Next" \
+		-width 15 -command " destroy $w; focus $oldFocus;  menu3 .menu3 \"$title\""
+	button $w.f.prev -text "Prev" \
+		-width 15 -command " destroy $w; focus $oldFocus; menu1 .menu1 \"$title\""
+	pack $w.f.back $w.f.next $w.f.prev -side left -expand on
+	pack $w.f -pady 10 -side bottom -anchor w -fill x
+	frame $w.topline -relief ridge -borderwidth 2 -height 2
+	pack $w.topline -side top -fill x
+
+	frame $w.botline -relief ridge -borderwidth 2 -height 2
+	pack $w.botline -side bottom -fill x
+
+	frame $w.config
+	pack $w.config -fill y -expand on
+
+	scrollbar $w.config.vscroll -command "$w.config.canvas yview"
+	pack $w.config.vscroll -side right -fill y
+
+	canvas $w.config.canvas -height 1\
+		-relief flat -borderwidth 0 -yscrollcommand "$w.config.vscroll set" \
+		-width [expr [winfo screenwidth .] * 1 / 2] 
+	frame $w.config.f
+	pack $w.config.canvas -side right -fill y
+
+
+	global tmpvar_6
+	minimenu $w.config.f 2 0 "Kernel Interface Specification" tmpvar_6 CONFIG_VERSION_X0
+	menu $w.config.f.x0.x.menu
+	$w.config.f.x0.x.menu add radiobutton -label "X.0" -variable tmpvar_6 -value "X.0" -command "update_menu2 .menu2.config.f"
+	$w.config.f.x0.x.menu add radiobutton -label "X.1" -variable tmpvar_6 -value "X.1" -command "update_menu2 .menu2.config.f"
+	bool $w.config.f 2 1 "Use new sigma0 RPC protocol" CONFIG_L4_NEWSIGMA0
+	bool $w.config.f 2 2 "Enable IO-FlexPages" CONFIG_IO_FLEXPAGES
+	bool $w.config.f 2 3 "Use SYSENTER/SYSEXIT for IPC" CONFIG_L4_SYSENTEREXIT
+
+
+
+	focus $w
+	update_menu2 $w.config.f
+	global winx; global winy
+	set winx [expr [winfo x .]+30]; set winy [expr [winfo y .]+30]
+	wm geometry $w +$winx+$winy
+	update idletasks
+	$w.config.canvas create window 0 0 -anchor nw -window $w.config.f
+
+	$w.config.canvas configure \
+		-width [expr [winfo reqwidth $w.config.f] + 1]\
+		-scrollregion "-1 -1 [expr [winfo reqwidth $w.config.f] + 1] \
+			 [expr [winfo reqheight $w.config.f] + 1]"
+
+	set winy [expr [winfo reqh $w] - [winfo reqh $w.config.canvas]]
+	set scry [expr [winfo screenh $w] / 2]
+	set maxy [expr [winfo screenh $w] * 3 / 4]
+	set canvtotal [expr [winfo reqh $w.config.f] + 2]
+	if [expr $winy + $canvtotal < $maxy] {
+		$w.config.canvas configure -height $canvtotal
+	} else {
+		$w.config.canvas configure -height [expr $scry - $winy]
+	}
+	update idletasks
+	wm maxsize $w [winfo width $w] [winfo screenheight $w]
+	wm minsize $w [winfo width $w] 100
+
+	wm deiconify $w
+}
+
+
+proc update_menu2 {w}  {
+	update_define
+	global CONFIG_L4_NEWSIGMA0; vfix CONFIG_L4_NEWSIGMA0
+	global tmpvar_0; vfix tmpvar_0
+	global CONFIG_IO_FLEXPAGES; vfix CONFIG_IO_FLEXPAGES
+	if {($CONFIG_L4_NEWSIGMA0 == 1 && $tmpvar_0 == "x86")} then { .menu2.config.f.x2.y configure -state normal;.menu2.config.f.x2.n configure -state normal;.menu2.config.f.x2.l configure -state normal;set CONFIG_IO_FLEXPAGES [expr $CONFIG_IO_FLEXPAGES&15];} else { .menu2.config.f.x2.y configure -state disabled;.menu2.config.f.x2.n configure -state disabled;.menu2.config.f.x2.l configure -state disabled;set CONFIG_IO_FLEXPAGES [expr $CONFIG_IO_FLEXPAGES|16];}
+
+	update_mainmenu $w
+}
+
+
+menu_option menu3 3 "Base Applications"
+proc menu3 {w title} {
+	catch {destroy $w}
+	toplevel $w -class Dialog
+	wm withdraw $w
+	message $w.m -width 400 -aspect 300 -text \
+		"Base Applications"  -relief raised
+	pack $w.m -pady 10 -side top -padx 10
+	wm title $w "Base Applications" 
+
+	set oldFocus [focus]
+	frame $w.f
+	button $w.f.back -text "Main Menu" \
+		-width 15 -command "destroy $w; focus $oldFocus; update_mainmenu $w"
+	button $w.f.next -text "Next" \
+		-width 15 -command " destroy $w; focus $oldFocus;  menu4 .menu4 \"$title\""
+	$w.f.next configure -state disabled
+	button $w.f.prev -text "Prev" \
+		-width 15 -command " destroy $w; focus $oldFocus; menu2 .menu2 \"$title\""
+	pack $w.f.back $w.f.next $w.f.prev -side left -expand on
+	pack $w.f -pady 10 -side bottom -anchor w -fill x
+	frame $w.topline -relief ridge -borderwidth 2 -height 2
+	pack $w.topline -side top -fill x
+
+	frame $w.botline -relief ridge -borderwidth 2 -height 2
+	pack $w.botline -side bottom -fill x
+
+	frame $w.config
+	pack $w.config -fill y -expand on
+
+	scrollbar $w.config.vscroll -command "$w.config.canvas yview"
+	pack $w.config.vscroll -side right -fill y
+
+	canvas $w.config.canvas -height 1\
+		-relief flat -borderwidth 0 -yscrollcommand "$w.config.vscroll set" \
+		-width [expr [winfo screenwidth .] * 1 / 2] 
+	frame $w.config.f
+	pack $w.config.canvas -side right -fill y
+
+
+	bool $w.config.f 3 0 "Build sigma0" CONFIG_BUILD_SIGMA0
+	hex $w.config.f 3 1 "DNARD sigma0 base" LBS0_ARM_DNARD
+	hex $w.config.f 3 2 "Brutus sigma0 base" LBS0_ARM_BRUTUS
+	hex $w.config.f 3 3 "PLEB sigma0 base" LBS0_ARM_PLEB
+	hex $w.config.f 3 4 "IPaq sigma0 base" LBS0_ARM_IPAQ
+	hex $w.config.f 3 5 "EP7211 sigma0 base" LBS0_ARM_EP7211
+	hex $w.config.f 3 6 "X86 sigma0 base" LBS0_X86
+	bool $w.config.f 3 7 "Build root task" CONFIG_BUILD_ROOTTASK
+	hex $w.config.f 3 8 "DNARD root task base" LBRT_ARM_DNARD
+	hex $w.config.f 3 9 "Brutus root task base" LBRT_ARM_BRUTUS
+	hex $w.config.f 3 10 "PLEB root task base" LBRT_ARM_PLEB
+	hex $w.config.f 3 11 "IPaq root task base" LBRT_ARM_IPAQ
+	hex $w.config.f 3 12 "EP7211 root task base" LBRT_ARM_EP7211
+	hex $w.config.f 3 13 "X86 root task base" LBRT_X86
+	bool $w.config.f 3 14 "Build resource manager" CONFIG_BUILD_RMGR
+	global tmpvar_7
+	minimenu $w.config.f 3 15 "Putc output device" tmpvar_7 CONFIG_LIBIO_OUTSCRN
+	menu $w.config.f.x15.x.menu
+	$w.config.f.x15.x.menu add radiobutton -label "screen" -variable tmpvar_7 -value "screen" -command "update_menu3 .menu3.config.f"
+	$w.config.f.x15.x.menu add radiobutton -label "serial" -variable tmpvar_7 -value "serial" -command "update_menu3 .menu3.config.f"
+	hex $w.config.f 3 16 "Serial port address" CONFIG_LIBIO_COMPORT
+	int $w.config.f 3 17 "Serial port speed" CONFIG_LIBIO_COMSPEED
+
+
+
+	focus $w
+	update_menu3 $w.config.f
+	global winx; global winy
+	set winx [expr [winfo x .]+30]; set winy [expr [winfo y .]+30]
+	wm geometry $w +$winx+$winy
+	update idletasks
+	$w.config.canvas create window 0 0 -anchor nw -window $w.config.f
+
+	$w.config.canvas configure \
+		-width [expr [winfo reqwidth $w.config.f] + 1]\
+		-scrollregion "-1 -1 [expr [winfo reqwidth $w.config.f] + 1] \
+			 [expr [winfo reqheight $w.config.f] + 1]"
+
+	set winy [expr [winfo reqh $w] - [winfo reqh $w.config.canvas]]
+	set scry [expr [winfo screenh $w] / 2]
+	set maxy [expr [winfo screenh $w] * 3 / 4]
+	set canvtotal [expr [winfo reqh $w.config.f] + 2]
+	if [expr $winy + $canvtotal < $maxy] {
+		$w.config.canvas configure -height $canvtotal
+	} else {
+		$w.config.canvas configure -height [expr $scry - $winy]
+	}
+	update idletasks
+	wm maxsize $w [winfo width $w] [winfo screenheight $w]
+	wm minsize $w [winfo width $w] 100
+
+	wm deiconify $w
+}
+
+
+proc update_menu3 {w}  {
+	update_define
+	global CONFIG_BUILD_SIGMA0; vfix CONFIG_BUILD_SIGMA0
+	global tmpvar_0; vfix tmpvar_0
+	global tmpvar_1; vfix tmpvar_1
+	global LBS0_ARM_DNARD; vfix LBS0_ARM_DNARD
+	if {($CONFIG_BUILD_SIGMA0 == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "DNARD")} then { .menu3.config.f.x1.x configure -state normal -foreground [ cget .ref -foreground ]; .menu3.config.f.x1.l configure -state normal; } else { .menu3.config.f.x1.x configure -state disabled -foreground [ cget .ref -disabledforeground ];.menu3.config.f.x1.l configure -state disabled;}
+	global LBS0_ARM_BRUTUS; vfix LBS0_ARM_BRUTUS
+	if {($CONFIG_BUILD_SIGMA0 == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "Brutus")} then { .menu3.config.f.x2.x configure -state normal -foreground [ cget .ref -foreground ]; .menu3.config.f.x2.l configure -state normal; } else { .menu3.config.f.x2.x configure -state disabled -foreground [ cget .ref -disabledforeground ];.menu3.config.f.x2.l configure -state disabled;}
+	global LBS0_ARM_PLEB; vfix LBS0_ARM_PLEB
+	if {($CONFIG_BUILD_SIGMA0 == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "PLEB")} then { .menu3.config.f.x3.x configure -state normal -foreground [ cget .ref -foreground ]; .menu3.config.f.x3.l configure -state normal; } else { .menu3.config.f.x3.x configure -state disabled -foreground [ cget .ref -disabledforeground ];.menu3.config.f.x3.l configure -state disabled;}
+	global LBS0_ARM_IPAQ; vfix LBS0_ARM_IPAQ
+	if {($CONFIG_BUILD_SIGMA0 == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "IPaq")} then { .menu3.config.f.x4.x configure -state normal -foreground [ cget .ref -foreground ]; .menu3.config.f.x4.l configure -state normal; } else { .menu3.config.f.x4.x configure -state disabled -foreground [ cget .ref -disabledforeground ];.menu3.config.f.x4.l configure -state disabled;}
+	global LBS0_ARM_EP7211; vfix LBS0_ARM_EP7211
+	if {($CONFIG_BUILD_SIGMA0 == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "EP7211")} then { .menu3.config.f.x5.x configure -state normal -foreground [ cget .ref -foreground ]; .menu3.config.f.x5.l configure -state normal; } else { .menu3.config.f.x5.x configure -state disabled -foreground [ cget .ref -disabledforeground ];.menu3.config.f.x5.l configure -state disabled;}
+	global LBS0_X86; vfix LBS0_X86
+	if {($CONFIG_BUILD_SIGMA0 == 1) && ($tmpvar_0 == "x86")} then { .menu3.config.f.x6.x configure -state normal -foreground [ cget .ref -foreground ]; .menu3.config.f.x6.l configure -state normal; } else { .menu3.config.f.x6.x configure -state disabled -foreground [ cget .ref -disabledforeground ];.menu3.config.f.x6.l configure -state disabled;}
+	global CONFIG_BUILD_ROOTTASK; vfix CONFIG_BUILD_ROOTTASK
+	global LBRT_ARM_DNARD; vfix LBRT_ARM_DNARD
+	if {($CONFIG_BUILD_ROOTTASK == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "DNARD")} then { .menu3.config.f.x8.x configure -state normal -foreground [ cget .ref -foreground ]; .menu3.config.f.x8.l configure -state normal; } else { .menu3.config.f.x8.x configure -state disabled -foreground [ cget .ref -disabledforeground ];.menu3.config.f.x8.l configure -state disabled;}
+	global LBRT_ARM_BRUTUS; vfix LBRT_ARM_BRUTUS
+	if {($CONFIG_BUILD_ROOTTASK == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "Brutus")} then { .menu3.config.f.x9.x configure -state normal -foreground [ cget .ref -foreground ]; .menu3.config.f.x9.l configure -state normal; } else { .menu3.config.f.x9.x configure -state disabled -foreground [ cget .ref -disabledforeground ];.menu3.config.f.x9.l configure -state disabled;}
+	global LBRT_ARM_PLEB; vfix LBRT_ARM_PLEB
+	if {($CONFIG_BUILD_ROOTTASK == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "PLEB")} then { .menu3.config.f.x10.x configure -state normal -foreground [ cget .ref -foreground ]; .menu3.config.f.x10.l configure -state normal; } else { .menu3.config.f.x10.x configure -state disabled -foreground [ cget .ref -disabledforeground ];.menu3.config.f.x10.l configure -state disabled;}
+	global LBRT_ARM_IPAQ; vfix LBRT_ARM_IPAQ
+	if {($CONFIG_BUILD_ROOTTASK == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "IPaq")} then { .menu3.config.f.x11.x configure -state normal -foreground [ cget .ref -foreground ]; .menu3.config.f.x11.l configure -state normal; } else { .menu3.config.f.x11.x configure -state disabled -foreground [ cget .ref -disabledforeground ];.menu3.config.f.x11.l configure -state disabled;}
+	global LBRT_ARM_EP7211; vfix LBRT_ARM_EP7211
+	if {($CONFIG_BUILD_ROOTTASK == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "EP7211")} then { .menu3.config.f.x12.x configure -state normal -foreground [ cget .ref -foreground ]; .menu3.config.f.x12.l configure -state normal; } else { .menu3.config.f.x12.x configure -state disabled -foreground [ cget .ref -disabledforeground ];.menu3.config.f.x12.l configure -state disabled;}
+	global LBRT_X86; vfix LBRT_X86
+	if {($CONFIG_BUILD_ROOTTASK == 1) && ($tmpvar_0 == "x86")} then { .menu3.config.f.x13.x configure -state normal -foreground [ cget .ref -foreground ]; .menu3.config.f.x13.l configure -state normal; } else { .menu3.config.f.x13.x configure -state disabled -foreground [ cget .ref -disabledforeground ];.menu3.config.f.x13.l configure -state disabled;}
+	global CONFIG_BUILD_RMGR; vfix CONFIG_BUILD_RMGR
+	if {($tmpvar_0 == "x86")} then { .menu3.config.f.x14.y configure -state normal;.menu3.config.f.x14.n configure -state normal;.menu3.config.f.x14.l configure -state normal;set CONFIG_BUILD_RMGR [expr $CONFIG_BUILD_RMGR&15];} else { .menu3.config.f.x14.y configure -state disabled;.menu3.config.f.x14.n configure -state disabled;.menu3.config.f.x14.l configure -state disabled;set CONFIG_BUILD_RMGR [expr $CONFIG_BUILD_RMGR|16];}
+	global CONFIG_LIBIO_OUTSCRN; vfix CONFIG_LIBIO_OUTSCRN
+	if {($tmpvar_0 == "x86")} then { .menu3.config.f.x15.x configure -state normal} else { .menu3.config.f.x15.x configure -state disabled}
+	global CONFIG_LIBIO_OUTCOM; vfix CONFIG_LIBIO_OUTCOM
+	if {($tmpvar_0 == "x86")} then { .menu3.config.f.x15.x configure -state normal} else { .menu3.config.f.x15.x configure -state disabled}
+	global tmpvar_7; vfix tmpvar_7
+	global CONFIG_LIBIO_COMPORT; vfix CONFIG_LIBIO_COMPORT
+	if {($tmpvar_0 == "x86") && ($tmpvar_7 == "serial")} then { .menu3.config.f.x16.x configure -state normal -foreground [ cget .ref -foreground ]; .menu3.config.f.x16.l configure -state normal; } else { .menu3.config.f.x16.x configure -state disabled -foreground [ cget .ref -disabledforeground ];.menu3.config.f.x16.l configure -state disabled;}
+	global CONFIG_LIBIO_COMSPEED; vfix CONFIG_LIBIO_COMSPEED
+	if {($tmpvar_0 == "x86") && ($tmpvar_7 == "serial")} then { .menu3.config.f.x17.x configure -state normal -foreground [ cget .ref -foreground ]; .menu3.config.f.x17.l configure -state normal; } else { .menu3.config.f.x17.x configure -state disabled -foreground [ cget .ref -disabledforeground ];.menu3.config.f.x17.l configure -state disabled;}
+
+	update_mainmenu $w
+}
+
+
+proc update_mainmenu {w}  {
+}
+
+
+set tmpvar_0 "(not set)"
+set CONFIG_ARCH_ARM 0
+set CONFIG_ARCH_X86 0
+set CONFIG_ARCH_MIPS 0
+set CONFIG_ARCH_SH 0
+set CONFIG_ARCH_M68K 0
+set tmpvar_1 "(not set)"
+set CONFIG_ARCH_ARM_DNARD 0
+set CONFIG_ARCH_ARM_BRUTUS 0
+set CONFIG_ARCH_ARM_PLEB 0
+set CONFIG_ARCH_ARM_IPAQ 0
+set CONFIG_ARCH_ARM_EP7211 0
+set tmpvar_2 "(not set)"
+set CONFIG_ARCH_X86_I586 0
+set tmpvar_3 "(not set)"
+set CONFIG_ARCH_MIPS_R4000 0
+set tmpvar_4 "(not set)"
+set CONFIG_ARCH_SH_EMU 0
+set CONFIG_ARCH_SH_SH3 0
+set CONFIG_ARCH_SH_SH4 0
+set tmpvar_5 "(not set)"
+set CONFIG_ARCH_M68K_DRAGONBALL 0
+set tmpvar_6 "(not set)"
+set CONFIG_VERSION_X0 0
+set CONFIG_VERSION_X1 0
+set CONFIG_L4_NEWSIGMA0 0
+set CONFIG_IO_FLEXPAGES 0
+set CONFIG_L4_SYSENTEREXIT 0
+set CONFIG_BUILD_SIGMA0 0
+set LBS0_ARM_DNARD 0C000000
+set LBS0_ARM_BRUTUS D0000000
+set LBS0_ARM_PLEB C8020000
+set LBS0_ARM_IPAQ D0000000
+set LBS0_ARM_EP7211 C0400000
+set LBS0_X86 00020000
+set CONFIG_BUILD_ROOTTASK 0
+set LBRT_ARM_DNARD 0C100000
+set LBRT_ARM_BRUTUS D0100000
+set LBRT_ARM_PLEB C8040000
+set LBRT_ARM_IPAQ D0100000
+set LBRT_ARM_EP7211 C0500000
+set LBRT_X86 00300000
+set CONFIG_BUILD_RMGR 0
+set tmpvar_7 "(not set)"
+set CONFIG_LIBIO_OUTSCRN 0
+set CONFIG_LIBIO_OUTCOM 0
+set CONFIG_LIBIO_COMPORT 3F8
+set CONFIG_LIBIO_COMSPEED 115200
+proc writeconfig {file1 file2} {
+	set cfg [open $file1 w]
+	set autocfg [open $file2 w]
+	set notmod 1
+	set notset 0
+	puts $cfg "#"
+	puts $cfg "# Automatically generated make config: don't edit"
+	puts $cfg "#"
+	puts $autocfg "/*"
+	puts $autocfg " * Automatically generated C config: don't edit"
+	puts $autocfg " */"
+	puts $autocfg "#define AUTOCONF_INCLUDED"
+	write_comment $cfg $autocfg "Architecture"
+	global _CONFIG_ARCH
+	if {("1" != "0")} then { set _CONFIG_ARCH 1 }
+	global tmpvar_0
+	global _CONFIG_ARCH
+	if { $tmpvar_0 == "arm"} then { write_tristate $cfg $autocfg CONFIG_ARCH_ARM 1 $_CONFIG_ARCH } else { write_tristate $cfg $autocfg CONFIG_ARCH_ARM 0 $_CONFIG_ARCH }
+	global _CONFIG_ARCH
+	if { $tmpvar_0 == "x86"} then { write_tristate $cfg $autocfg CONFIG_ARCH_X86 1 $_CONFIG_ARCH } else { write_tristate $cfg $autocfg CONFIG_ARCH_X86 0 $_CONFIG_ARCH }
+	global _CONFIG_ARCH
+	if { $tmpvar_0 == "mips"} then { write_tristate $cfg $autocfg CONFIG_ARCH_MIPS 1 $_CONFIG_ARCH } else { write_tristate $cfg $autocfg CONFIG_ARCH_MIPS 0 $_CONFIG_ARCH }
+	global _CONFIG_ARCH
+	if { $tmpvar_0 == "superh"} then { write_tristate $cfg $autocfg CONFIG_ARCH_SH 1 $_CONFIG_ARCH } else { write_tristate $cfg $autocfg CONFIG_ARCH_SH 0 $_CONFIG_ARCH }
+	global _CONFIG_ARCH
+	if { $tmpvar_0 == "m68k"} then { write_tristate $cfg $autocfg CONFIG_ARCH_M68K 1 $_CONFIG_ARCH } else { write_tristate $cfg $autocfg CONFIG_ARCH_M68K 0 $_CONFIG_ARCH }
+	global tmpvar_1
+	global CONFIG_ARCH_ARM
+	if { $tmpvar_1 == "DNARD"} then { write_tristate $cfg $autocfg CONFIG_ARCH_ARM_DNARD 1 $CONFIG_ARCH_ARM } else { write_tristate $cfg $autocfg CONFIG_ARCH_ARM_DNARD 0 $CONFIG_ARCH_ARM }
+	global CONFIG_ARCH_ARM
+	if { $tmpvar_1 == "Brutus"} then { write_tristate $cfg $autocfg CONFIG_ARCH_ARM_BRUTUS 1 $CONFIG_ARCH_ARM } else { write_tristate $cfg $autocfg CONFIG_ARCH_ARM_BRUTUS 0 $CONFIG_ARCH_ARM }
+	global CONFIG_ARCH_ARM
+	if { $tmpvar_1 == "PLEB"} then { write_tristate $cfg $autocfg CONFIG_ARCH_ARM_PLEB 1 $CONFIG_ARCH_ARM } else { write_tristate $cfg $autocfg CONFIG_ARCH_ARM_PLEB 0 $CONFIG_ARCH_ARM }
+	global CONFIG_ARCH_ARM
+	if { $tmpvar_1 == "IPaq"} then { write_tristate $cfg $autocfg CONFIG_ARCH_ARM_IPAQ 1 $CONFIG_ARCH_ARM } else { write_tristate $cfg $autocfg CONFIG_ARCH_ARM_IPAQ 0 $CONFIG_ARCH_ARM }
+	global CONFIG_ARCH_ARM
+	if { $tmpvar_1 == "EP7211"} then { write_tristate $cfg $autocfg CONFIG_ARCH_ARM_EP7211 1 $CONFIG_ARCH_ARM } else { write_tristate $cfg $autocfg CONFIG_ARCH_ARM_EP7211 0 $CONFIG_ARCH_ARM }
+	global tmpvar_2
+	global CONFIG_ARCH_X86
+	if { $tmpvar_2 == "i586"} then { write_tristate $cfg $autocfg CONFIG_ARCH_X86_I586 1 $CONFIG_ARCH_X86 } else { write_tristate $cfg $autocfg CONFIG_ARCH_X86_I586 0 $CONFIG_ARCH_X86 }
+	global tmpvar_3
+	global CONFIG_ARCH_MIPS
+	if { $tmpvar_3 == "R4000"} then { write_tristate $cfg $autocfg CONFIG_ARCH_MIPS_R4000 1 $CONFIG_ARCH_MIPS } else { write_tristate $cfg $autocfg CONFIG_ARCH_MIPS_R4000 0 $CONFIG_ARCH_MIPS }
+	global tmpvar_4
+	global CONFIG_ARCH_SH
+	if { $tmpvar_4 == "Emulator"} then { write_tristate $cfg $autocfg CONFIG_ARCH_SH_EMU 1 $CONFIG_ARCH_SH } else { write_tristate $cfg $autocfg CONFIG_ARCH_SH_EMU 0 $CONFIG_ARCH_SH }
+	global CONFIG_ARCH_SH
+	if { $tmpvar_4 == "SH3"} then { write_tristate $cfg $autocfg CONFIG_ARCH_SH_SH3 1 $CONFIG_ARCH_SH } else { write_tristate $cfg $autocfg CONFIG_ARCH_SH_SH3 0 $CONFIG_ARCH_SH }
+	global CONFIG_ARCH_SH
+	if { $tmpvar_4 == "SH4"} then { write_tristate $cfg $autocfg CONFIG_ARCH_SH_SH4 1 $CONFIG_ARCH_SH } else { write_tristate $cfg $autocfg CONFIG_ARCH_SH_SH4 0 $CONFIG_ARCH_SH }
+	global tmpvar_5
+	global CONFIG_ARCH_M68K
+	if { $tmpvar_5 == "Dragonball"} then { write_tristate $cfg $autocfg CONFIG_ARCH_M68K_DRAGONBALL 1 $CONFIG_ARCH_M68K } else { write_tristate $cfg $autocfg CONFIG_ARCH_M68K_DRAGONBALL 0 $CONFIG_ARCH_M68K }
+	write_comment $cfg $autocfg "Kernel Configuration"
+	global tmpvar_6
+	if { $tmpvar_6 == "X.0" } then { write_tristate $cfg $autocfg CONFIG_VERSION_X0 1 $notmod } else { write_tristate $cfg $autocfg CONFIG_VERSION_X0 0 $notmod }
+	if { $tmpvar_6 == "X.1" } then { write_tristate $cfg $autocfg CONFIG_VERSION_X1 1 $notmod } else { write_tristate $cfg $autocfg CONFIG_VERSION_X1 0 $notmod }
+	global CONFIG_L4_NEWSIGMA0
+	write_tristate $cfg $autocfg CONFIG_L4_NEWSIGMA0 $CONFIG_L4_NEWSIGMA0 $notmod
+	global CONFIG_IO_FLEXPAGES
+	if {($CONFIG_L4_NEWSIGMA0 == 1 && $tmpvar_0 == "x86")} then { write_tristate $cfg $autocfg CONFIG_IO_FLEXPAGES $CONFIG_IO_FLEXPAGES $notmod }
+	global CONFIG_L4_SYSENTEREXIT
+	write_tristate $cfg $autocfg CONFIG_L4_SYSENTEREXIT $CONFIG_L4_SYSENTEREXIT $notmod
+	write_comment $cfg $autocfg "Base Applications"
+	global CONFIG_BUILD_SIGMA0
+	write_tristate $cfg $autocfg CONFIG_BUILD_SIGMA0 $CONFIG_BUILD_SIGMA0 $notmod
+	global LBS0_ARM_DNARD
+	if {($CONFIG_BUILD_SIGMA0 == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "DNARD")} then { write_hex $cfg $autocfg LBS0_ARM_DNARD $LBS0_ARM_DNARD $notmod }
+	global LBS0_ARM_BRUTUS
+	if {($CONFIG_BUILD_SIGMA0 == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "Brutus")} then { write_hex $cfg $autocfg LBS0_ARM_BRUTUS $LBS0_ARM_BRUTUS $notmod }
+	global LBS0_ARM_PLEB
+	if {($CONFIG_BUILD_SIGMA0 == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "PLEB")} then { write_hex $cfg $autocfg LBS0_ARM_PLEB $LBS0_ARM_PLEB $notmod }
+	global LBS0_ARM_IPAQ
+	if {($CONFIG_BUILD_SIGMA0 == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "IPaq")} then { write_hex $cfg $autocfg LBS0_ARM_IPAQ $LBS0_ARM_IPAQ $notmod }
+	global LBS0_ARM_EP7211
+	if {($CONFIG_BUILD_SIGMA0 == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "EP7211")} then { write_hex $cfg $autocfg LBS0_ARM_EP7211 $LBS0_ARM_EP7211 $notmod }
+	global LBS0_X86
+	if {($CONFIG_BUILD_SIGMA0 == 1) && ($tmpvar_0 == "x86")} then { write_hex $cfg $autocfg LBS0_X86 $LBS0_X86 $notmod }
+	global CONFIG_BUILD_ROOTTASK
+	write_tristate $cfg $autocfg CONFIG_BUILD_ROOTTASK $CONFIG_BUILD_ROOTTASK $notmod
+	global LBRT_ARM_DNARD
+	if {($CONFIG_BUILD_ROOTTASK == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "DNARD")} then { write_hex $cfg $autocfg LBRT_ARM_DNARD $LBRT_ARM_DNARD $notmod }
+	global LBRT_ARM_BRUTUS
+	if {($CONFIG_BUILD_ROOTTASK == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "Brutus")} then { write_hex $cfg $autocfg LBRT_ARM_BRUTUS $LBRT_ARM_BRUTUS $notmod }
+	global LBRT_ARM_PLEB
+	if {($CONFIG_BUILD_ROOTTASK == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "PLEB")} then { write_hex $cfg $autocfg LBRT_ARM_PLEB $LBRT_ARM_PLEB $notmod }
+	global LBRT_ARM_IPAQ
+	if {($CONFIG_BUILD_ROOTTASK == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "IPaq")} then { write_hex $cfg $autocfg LBRT_ARM_IPAQ $LBRT_ARM_IPAQ $notmod }
+	global LBRT_ARM_EP7211
+	if {($CONFIG_BUILD_ROOTTASK == 1) && ($tmpvar_0 == "arm") && ($tmpvar_1 == "EP7211")} then { write_hex $cfg $autocfg LBRT_ARM_EP7211 $LBRT_ARM_EP7211 $notmod }
+	global LBRT_X86
+	if {($CONFIG_BUILD_ROOTTASK == 1) && ($tmpvar_0 == "x86")} then { write_hex $cfg $autocfg LBRT_X86 $LBRT_X86 $notmod }
+	global CONFIG_BUILD_RMGR
+	if {($tmpvar_0 == "x86")} then { write_tristate $cfg $autocfg CONFIG_BUILD_RMGR $CONFIG_BUILD_RMGR $notmod }
+	global tmpvar_7
+	if { $tmpvar_7 == "screen" } then { write_tristate $cfg $autocfg CONFIG_LIBIO_OUTSCRN 1 $notmod } else { write_tristate $cfg $autocfg CONFIG_LIBIO_OUTSCRN 0 $notmod }
+	if { $tmpvar_7 == "serial" } then { write_tristate $cfg $autocfg CONFIG_LIBIO_OUTCOM 1 $notmod } else { write_tristate $cfg $autocfg CONFIG_LIBIO_OUTCOM 0 $notmod }
+	global CONFIG_LIBIO_COMPORT
+	if {($tmpvar_0 == "x86") && ($tmpvar_7 == "serial")} then { write_hex $cfg $autocfg CONFIG_LIBIO_COMPORT $CONFIG_LIBIO_COMPORT $notmod }
+	global CONFIG_LIBIO_COMSPEED
+	if {($tmpvar_0 == "x86") && ($tmpvar_7 == "serial")} then { write_int $cfg $autocfg CONFIG_LIBIO_COMSPEED $CONFIG_LIBIO_COMSPEED $notmod }
+	close $cfg
+	close $autocfg
+}
+
+
+proc clear_choices { } {
+	global CONFIG_ARCH_ARM; set CONFIG_ARCH_ARM 0
+	global CONFIG_ARCH_X86; set CONFIG_ARCH_X86 0
+	global CONFIG_ARCH_MIPS; set CONFIG_ARCH_MIPS 0
+	global CONFIG_ARCH_SH; set CONFIG_ARCH_SH 0
+	global CONFIG_ARCH_M68K; set CONFIG_ARCH_M68K 0
+	global CONFIG_ARCH_ARM_DNARD; set CONFIG_ARCH_ARM_DNARD 0
+	global CONFIG_ARCH_ARM_BRUTUS; set CONFIG_ARCH_ARM_BRUTUS 0
+	global CONFIG_ARCH_ARM_PLEB; set CONFIG_ARCH_ARM_PLEB 0
+	global CONFIG_ARCH_ARM_IPAQ; set CONFIG_ARCH_ARM_IPAQ 0
+	global CONFIG_ARCH_ARM_EP7211; set CONFIG_ARCH_ARM_EP7211 0
+	global CONFIG_ARCH_X86_I586; set CONFIG_ARCH_X86_I586 0
+	global CONFIG_ARCH_MIPS_R4000; set CONFIG_ARCH_MIPS_R4000 0
+	global CONFIG_ARCH_SH_EMU; set CONFIG_ARCH_SH_EMU 0
+	global CONFIG_ARCH_SH_SH3; set CONFIG_ARCH_SH_SH3 0
+	global CONFIG_ARCH_SH_SH4; set CONFIG_ARCH_SH_SH4 0
+	global CONFIG_ARCH_M68K_DRAGONBALL; set CONFIG_ARCH_M68K_DRAGONBALL 0
+	global CONFIG_VERSION_X0; set CONFIG_VERSION_X0 0
+	global CONFIG_VERSION_X1; set CONFIG_VERSION_X1 0
+	global CONFIG_LIBIO_OUTSCRN; set CONFIG_LIBIO_OUTSCRN 0
+	global CONFIG_LIBIO_OUTCOM; set CONFIG_LIBIO_OUTCOM 0
+}
+
+
+proc update_choices { } {
+	global tmpvar_0
+	global CONFIG_ARCH_ARM
+	if { $CONFIG_ARCH_ARM == 1 } then { set tmpvar_0 "arm" }
+	global CONFIG_ARCH_X86
+	if { $CONFIG_ARCH_X86 == 1 } then { set tmpvar_0 "x86" }
+	global CONFIG_ARCH_MIPS
+	if { $CONFIG_ARCH_MIPS == 1 } then { set tmpvar_0 "mips" }
+	global CONFIG_ARCH_SH
+	if { $CONFIG_ARCH_SH == 1 } then { set tmpvar_0 "superh" }
+	global CONFIG_ARCH_M68K
+	if { $CONFIG_ARCH_M68K == 1 } then { set tmpvar_0 "m68k" }
+	global tmpvar_1
+	global CONFIG_ARCH_ARM_DNARD
+	if { $CONFIG_ARCH_ARM_DNARD == 1 } then { set tmpvar_1 "DNARD" }
+	global CONFIG_ARCH_ARM_BRUTUS
+	if { $CONFIG_ARCH_ARM_BRUTUS == 1 } then { set tmpvar_1 "Brutus" }
+	global CONFIG_ARCH_ARM_PLEB
+	if { $CONFIG_ARCH_ARM_PLEB == 1 } then { set tmpvar_1 "PLEB" }
+	global CONFIG_ARCH_ARM_IPAQ
+	if { $CONFIG_ARCH_ARM_IPAQ == 1 } then { set tmpvar_1 "IPaq" }
+	global CONFIG_ARCH_ARM_EP7211
+	if { $CONFIG_ARCH_ARM_EP7211 == 1 } then { set tmpvar_1 "EP7211" }
+	global tmpvar_2
+	global CONFIG_ARCH_X86_I586
+	if { $CONFIG_ARCH_X86_I586 == 1 } then { set tmpvar_2 "i586" }
+	global tmpvar_3
+	global CONFIG_ARCH_MIPS_R4000
+	if { $CONFIG_ARCH_MIPS_R4000 == 1 } then { set tmpvar_3 "R4000" }
+	global tmpvar_4
+	global CONFIG_ARCH_SH_EMU
+	if { $CONFIG_ARCH_SH_EMU == 1 } then { set tmpvar_4 "Emulator" }
+	global CONFIG_ARCH_SH_SH3
+	if { $CONFIG_ARCH_SH_SH3 == 1 } then { set tmpvar_4 "SH3" }
+	global CONFIG_ARCH_SH_SH4
+	if { $CONFIG_ARCH_SH_SH4 == 1 } then { set tmpvar_4 "SH4" }
+	global tmpvar_5
+	global CONFIG_ARCH_M68K_DRAGONBALL
+	if { $CONFIG_ARCH_M68K_DRAGONBALL == 1 } then { set tmpvar_5 "Dragonball" }
+	global tmpvar_6
+	global CONFIG_VERSION_X0
+	if { $CONFIG_VERSION_X0 == 1 } then { set tmpvar_6 "X.0" }
+	global CONFIG_VERSION_X1
+	if { $CONFIG_VERSION_X1 == 1 } then { set tmpvar_6 "X.1" }
+	global tmpvar_7
+	global CONFIG_LIBIO_OUTSCRN
+	if { $CONFIG_LIBIO_OUTSCRN == 1 } then { set tmpvar_7 "screen" }
+	global CONFIG_LIBIO_OUTCOM
+	if { $CONFIG_LIBIO_OUTCOM == 1 } then { set tmpvar_7 "serial" }
+}
+
+
+proc update_define { } {
+	global _CONFIG_ARCH
+	if {("1" != "0")} then { set _CONFIG_ARCH 1 } 
+}
+
+
+set defaults "defconfig"
+# FILE: tail.tk
+# This file is boilerplate TCL/TK function definitions for 'make xconfig'.
+#
+# CHANGES
+# =======
+#
+# 8 January 1998, Michael Elizabeth Chastain, <mec@shout.net>
+# Arrange buttons in three columns for better screen fitting.
+#
+
+#
+# Read the user's settings from .config.  These will override whatever is
+# in config.in.  Don't do this if the user specified a -D to force
+# the defaults.
+#
+if { [file readable .config] == 1} then {
+	if { $argc > 0 } then {
+		if { [lindex $argv 0] != "-D" } then {
+			read_config .config
+		}
+		else
+		{
+			read_config $defaults
+		}
+	} else {
+		read_config .config
+	}
+} else {
+	read_config $defaults
+}
+
+update_mainmenu .f0
+
+button .f0.control.save -anchor w -text "Save and Exit" \
+    -command { writeconfig .config ../include/config.h; read_config .config; \
+	       writeconfig .config ../include/config.h; exit; wrapup .wrap }
+
+button .f0.control.quit -anchor w -text "Quit Without Saving" \
+    -command { maybe_exit .maybe }
+
+button .f0.control.load -anchor w -text "Load Configuration from File" \
+    -command { load_configfile .load "Load Configuration from file" read_config_file
+}
+
+button .f0.control.store -anchor w -text "Store Configuration to File" \
+    -command { load_configfile .load "Store Configuration to file" write_config_file }
+
+#
+# Now pack everything.
+#
+
+pack .f0.control.store .f0.control.load .f0.control.quit .f0.control.save \
+    -padx 0 -pady 0 -side bottom -fill x
+pack .f0.arch .f0.apps .f0.control -side left -padx 5 -pady 0 -fill y
+pack .f0 -padx 5 -pady 5
+
+#
+# If we cannot write our config files, disable the write button.
+#
+if { [file exists .config] == 1 } then {
+		if { [file writable .config] == 0 } then {
+			.f0.control.save configure -state disabled
+		}
+	} else {
+		if { [file writable .] == 0 } then {
+			.f0.control.save configure -state disabled
+		}
+	}
+

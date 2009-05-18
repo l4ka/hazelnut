@@ -1,0 +1,4 @@
+*.ii *.s
+*.bin *.stripped
+modules.*
+arm-booter

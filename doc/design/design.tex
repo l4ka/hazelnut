@@ -1,0 +1,729 @@
+\documentclass[a4paper,twoside]{book}
+
+%\usepackage[draft]{graphicx}
+\usepackage{graphicx}
+\usepackage{subfigure}
+\usepackage{hhline}
+
+\newcommand{\ukern}{$\mu$-kernel}
+\newcommand{\lka}{\emph{L4Ka}}
+\newcommand{\sigmaz}{\mbox{$\sigma_0$}}
+\newcommand{\state}[1]{\texttt{#1}}
+
+\newcommand{\fdecl}[3]{\emph{#1} {\bf\emph{#2}} (\emph{#3})}
+\newcommand{\true}{\emph{true}}
+\newcommand{\false}{\emph{false}}
+\newcommand{\Type}[1]{\emph{#1}}
+\newcommand{\Func}[1]{\texttt{#1}()}
+\newcommand{\Var}[1]{\texttt{#1}}
+
+\raggedbottom{}
+
+\title{\lka \\ Design Manual \vspace*{5mm}}
+
+\author{
+  \hspace*{1mm} Uwe Dannowski \hspace*{1mm} \and
+  \hspace*{1mm} Espen Skoglund \hspace*{1mm} \and
+  \hspace*{1mm} Volkmar Uhlig \hspace*{1mm} \and
+  \\
+  System Architecture Group \\
+  University of Karlsruhe \\
+  \texttt{\small \{dannowski,skoglund,uhlig\}@ira.uka.de}
+  \vspace*{10mm}}
+
+\date{\today \\ {\small (Under construction)}}
+
+
+\begin{document}
+
+\maketitle{}
+
+\listoffigures{}
+
+\tableofcontents{}
+
+
+
+\chapter{Introduction}
+
+\section{Overview of L4}
+
+\section{Source Tree Layout}
+
+\section{Design Goals}
+
+
+
+\chapter{Design Overview}
+
+\section{Kernel Components}
+
+\section{Virtual Memory Layout}
+
+
+
+\chapter{Design Details}
+
+\section{Initialization}
+
+\section{General Exception and Interrupt Handling}
+
+
+\section{IPC}
+
+\subsection{Thread States}
+
+During an ongoing IPC operation, a thread may at different stages be
+blocked or otherwise descheduled.  If the thread is blocked, it is
+necessary for the thread being its IPC partner to identify why the
+thread is blocked.  Furthermore, if other threads in the system start
+a new IPC operation with the thread, it is necessary them to recognize
+that the thread is already involved in an IPC operation.  Failing to
+do so would cause the the ongoing IPC operation to fail in an
+arbitrary manner, rendering the system in an undefined non-recoverable
+state.  In short, threads will at times need to know which state other
+threads in the system currently holds.  In the L4/KA kernel a thread
+may at any time be in one of the following six states:
+
+\begin{description}
+\item{\state{RUNNING}:} The most common thread state.  All threads
+  which are not involved in an IPC operation, and all threads which
+  are in the initial or final phase of an IPC operation will be in
+  this state.
+
+\item{\state{POLLING}:} The thread is doing a send, but the receiver
+  is not ready to receive the message yet.
+
+\item{\state{WAITING}:} The thread is doing a receive, but the sender
+  is not ready to send the message yet.
+
+\item{\state{LOCKED\_RUNNING}:} The thread has started the actual
+  send/receive operation of the IPC, and is not currently blocked.
+
+\item{\state{LOCKED\_WAITING}:} The thread has started the actual
+  send/receive operation of the IPC, but is currently blocked.  The
+  thread can be blocked because either (a) the sender is copying data
+  to it (the receiver), or (b) it (the sender) are doing an indirect
+  memory message transfer and the receiver has to resolve a page fault 
+  in its address space.
+
+\item{\state{ABORTED}:} The thread is not runnable.  That is, it could
+  be in the process of being created, but does not yet have all
+  required data structures (e.g., page tables) initialized.  It could
+  also be that it is an event-driven kernel thread (e.g., the dynamic
+  kernel memory allocator, see Section~\ref{sec:Dynamic-kmem}) waiting 
+  for an event to occur.
+\end{description}
+
+
+\begin{table}[htbp]
+  \begin{center}
+    \begin{tabular}{|l|c|c|c|c|}
+      \hhline{~----}
+      \multicolumn{1}{c|}{} & Locked & Send-wait & Recv-wait & Schedulable \\
+      \hline
+      \state{RUNNING}         &     &     &     & yes \\
+      \state{POLLING}         &     & yes &     &     \\
+      \state{WAITING}         &     &     & yes &     \\
+      \state{LOCKED\_RUNNING} & yes &     &     & yes \\
+      \state{LOCKED\_WAITING} & yes &     &     &     \\
+      \state{ABORTED}         &     &     &     &     \\
+      \hline
+    \end{tabular}
+    \caption{Thread states and their respective thread state bits}
+    \label{tab:thread-states}
+  \end{center}
+\end{table}
+
+
+\begin{figure}[t]
+  \begin{center}
+    \includegraphics[scale=.8]{fig/figure.7}
+    \caption{Thread state transitions during an IPC operation}
+    \label{fig:thread-states}
+  \end{center}
+\end{figure}
+
+\subsection{Page Fault Tunneling}
+
+\section{Kernel Memory Allocator}
+\label{sec:Dynamic-kmem}
+
+
+\section{Address Spaces}
+
+The kernel identifes address spaces by a field in each thread control
+block pointing to an architecture specific class, \Type{space\_t},
+describing the address space.  How this class is implemented is
+architecture dependent, but it will typically be a structure
+describing the topmost page table in the page table hierarchy.
+Methods for retrieving the physical and virtual locations of this page
+table are then used by, e.g., the architecture specific thread
+switching code.  The methods implemented in the \Type{space\_t} class
+are never used by architecture independent code.
+
+
+\section{Generic Page Table Access}
+
+The \ukern\ contains generic functions for mapping and unmapping page
+frames from any multi-level page table.  The kernel can be configured
+to support an arbitrary number of page table levels with arbitrary
+page sizes.
+
+The page tables in the kernel are tightly coupled with the mapping
+database structures (see Section~\ref{sec:mapping-db}).  Each page
+table entry contains a link to its associated node, the mapping node,
+in the mapping database.  For page table layouts which are dictated by
+hardware and does not allow for such a link to be stored directly in
+the page table entry, a shadow page table scheme can be used.
+
+\begin{figure}[ht]
+  \begin{center}
+    \includegraphics[scale=.8]{fig/figure.8}
+    \caption[Shadow page tables]{Shadow page tables.  The location of the
+      shadow page table entry ($v_s$) can be calculated from the
+      location of the real page table entry ($v_r$).}
+    \label{fig:shadow-pagetab}
+  \end{center}
+\end{figure}
+
+Figure~\ref{fig:shadow-pagetab} illustrates how a shadow page table
+can be implemented.  The shadow page table is co-located with the real
+page table so that the two occupies one contiguous chunk of memory.
+If a page table is 4KByte in size, the location of a shadow page table
+entry---the entry containing the mapping node pointer---can then be
+calculated by adding 4KByte to the location of the real page table
+entry.
+
+
+\subsection{Specifying Hardware Page Sizes}
+
+An architecture defined constant, \Var{HW\_NUM\_PGSHIFTS}, defines the
+number of page sizes the page tables support.  This constant is
+augmented with an array, \Var{hw\_pgshifts}, containing the ``shift
+counts'' of all hardware page sizes (i.e., log$_2$ of the page sizes).
+All the shift counts must be listed in ascending order and the array
+must be terminated by the shift count for the complete virtual address
+space.  Also note that page tables logically containing page table
+entries of a size which can not be mapped by the hardware must still
+be included in the \Var{hw\_pgshifts} array.  In order for software to
+avoid mapping pages of such sizes an architecture dependent constant,
+\Var{HW\_VALID\_PGSIZES}, should define a bit-mask specifying the page
+sizes which are mapable by the hardware.  If bit $n$ is set in the
+constant it indicates that the hardware support mapping pages of size
+$2^n$.  Using this scheme, the specification for x86 page tables
+(supporting 4KByte and 4MByte pages) would look as follows:
+
+{\small
+\begin{verbatim}
+    #define HW_NUM_PGSHIFTS    2
+    #define HW_VALID_PGSIZES   ((1 << 22) + (1 << 12))
+
+    dword_t hw_pgshifts[HW_NUM_PGSHIFTS+1] = {
+        12,    // 4KB
+        22,    // 4MB
+        32     // 4GB (whole address space)
+    };
+\end{verbatim}
+}
+
+If the kernel was compiled for an older x86 architecture not
+supporting 4MByte pages, \Var{HW\_VALID\_PGSIZES} would have to be set
+to ``\texttt{(1~<<~12)}'' instead.
+
+
+\subsection{Accessing Page Tables}
+
+The generic page table access functions must have some way of
+accessing the architecture specific page tables.  This is achieved by
+defining an architecture specific class, \Type{pgent\_t}, which both
+defines the layout of a single page table entry and how to access the
+entry.
+
+The page table access functions will only access a page table through
+a number of methods in the \Type{pgent\_t} class.  The following list
+describes which methods must be supported in order to use the generic
+mapping and unmapping functionality of the kernel.  Additional methods
+may of course be specified, but will not be invoked by architecture
+independent code.  Each method takes at least two arguments, the
+address space identifier and the hardware page size index as described
+above.
+
+\begin{description}
+  
+\item{\fdecl{int}{is\_valid}{space\_t * s, int pgsize}\\} Return \true\ 
+  if page table entry is valid, \false\ otherwise.  A page table entry
+  containing a pointer to a subtree is considered to be valid.
+
+\item{\fdecl{int}{is\_writable}{space\_t * s, int pgsize}\\}
+  Return \true\ if page table entry indicates a writable page frame,
+  \false\ otherwise.
+  
+\item{\fdecl{int}{is\_subtree}{space\_t * s, int pgsize}\\} Return
+  \true\ if page table entry is a pointer to a subtree, \false\ 
+  otherwise.
+  
+\item{\fdecl{dword\_t}{address}{space\_t * s, int pgsize}\\} Return the
+  physical address of the page frame described by the page table
+  entry.  It is assumed that the page table entry contains a valid
+  mapping.
+  
+\item{\fdecl{pgent\_t *}{subtree}{space\_t * s, int pgsize}\\} Return
+  the location of the subtree described by the page table entry.  It
+  is assumed that the page table entry describes a valid subtree.
+  
+\item{\fdecl{mnode\_t *}{mapnode}{space\_t * s, int pgsize, dword\_t
+      vaddr}\\} Return the location of the mapping node associated
+  with the page table entry.  It is assumed that the page table entry
+  contains a valid mapping.  The virtual address which the page frame
+  maps to is supplied so that the implementation can choose to store
+  both the virtual address and the mapping node address in the same
+  location by storing the bitwise exlusive or of both values.
+  
+\item{\fdecl{dword\_t}{vaddr}{space\_t * s, int pgsize, mnode\_t *
+      map}\\} Return the virtual address for which the page frame of
+  the page table entry maps to.  It is assumed that the page table
+  entry contains a valid mapping.  The mapping node address is
+  supplied so that both the virtual address and the mapping node
+  address can be store in the same location using the bitwise
+  exclusive or of both values.
+  
+\item{\fdecl{void}{clear}{space\_t * s, int pgsize}\\} Invalidate the
+  page table entry.  It is assumed that the page table entry does not
+  describe a subtree.
+  
+\item{\fdecl{void}{make\_subtree}{space\_t * s, int pgsize}\\} Create
+  an empty subtree beneath the page table entry.  It is assumed that
+  the page table entry is invalid.  Any mappings in the page table
+  entry will not be invalidated and any existing subtrees will not be
+  deleted.
+  
+\item{\fdecl{void}{remove\_subtree}{space\_t * s, int pgsize}\\} Remove
+  the subtree described by the page table entry.  It is assumed that
+  the page table entry does indeed contain a subtree.  Subtrees are
+  not deleted recursively.  Any valid mappings or subtrees within the
+  subtree must be invalidated prior to invoking this function.
+  
+\item{\fdecl{void}{set\_entry}{space\_t * s, dword\_t vaddr, int
+      writable, int pgsize}\\} Initialize the page table entry with
+  the indication virtual address.  The \emph{writable} argument
+  indicates whether the page frame should be mapped writable or not.
+  It is assumed that the page table entry does not contain a subtree.
+  
+\item{\fdecl{void}{set\_writable}{space\_t * s, int pgsize}\\} Sets the
+  page table entry read-write.
+  
+\item{\fdecl{void}{set\_readonly}{space\_t * s, int pgsize}\\} Sets the
+  page table entry read-only.
+  
+\item{\fdecl{void}{set\_mapnode}{space\_t * s, int pgsize, mnode\_t *
+      map, dword\_t vaddr}\\} Sets the mapping node and virtual
+  address associated with the page table entry.  Any existing values
+  are unconditionally overwritten.
+  
+\item{\fdecl{pgent\_t *}{next}{space\_t * s, int n, int pgsize}\\}
+  Return the \emph{n}th page table entry following the current one.
+  No checks are made to see whether the returned page table entry
+  resides within the page table or not.
+
+\end{description}
+
+\section{Mapping Database}
+\label{sec:mapping-db}
+
+The mapping database is one of the single largest components of the
+\ukern.  This is not surprising.  It needs to manipulate possibly very
+complex data structures, and also needs to be flexible enough to
+support widely different hardware architectures (page sizes).  Of
+course, making the database very flexible also makes it somewhat more
+complex.  We have, however, found that the added complexity of
+supporting $n$ page sizes instead of only two (as is the case with
+Intel x86) is neglectable.  Furthermore, the generic database design
+is of great help when adopting the \ukern\ to other hardware
+architectures, and by having a common code base, possible bugs are
+more easily detected and fixed.
+
+
+\subsection{General Approach}
+
+The mapping database has to keep track of which address spaces each
+physical page frame in the system is mapped into.  It therefore maps
+physical page frames to address spaces in much the same way that page
+tables map virtual addresses to physical addresses.  In addition, the
+mapping database must also keep track of mappings between different
+address spaces (i.e., recursive mappings).  This is accomplished using
+two different data nodes: root nodes and mapping nodes.
+
+\begin{description}
+\item{\em Root nodes:} Root nodes are not associated with any specific
+  address space.  Rather, they are organized in arrays, and the
+  physical address of the page frame in question is used for indexing
+  into one particular root node.  A root node can point to a number of
+  mapping nodes, and/or it can point to an array of root nodes of
+  smaller page sizes.
+\item{\em Mapping nodes:} A mapping node \emph{is} associated with a
+  specific address space.  It identifies which address space the page
+  frame is mapped into, and the virtual address that the page is
+  mapped to.  Mapping nodes can---as root nodes---point to a number
+  other mapping nodes, and/or it can point to an array of root nodes
+  of smaller page sizes.
+\end{description}
+
+Using root nodes and mapping nodes, the mapping database is
+constructed with a top-level mapping node (representing the kernel),
+pointing to an array of root nodes spanning the whole address space.
+The size of this array depends on the size of the largest page size
+the hardware offers.  For example, the Intel x86 has top-level root
+nodes of 4~MB size, and the ARM has top-level root nodes of 1~MB size.
+
+\begin{figure}[t]
+  \begin{center}
+    \includegraphics{fig/figure.2}
+    \caption[Complex mapping tree]{Complex mapping tree consisting of
+      64~KB nodes (A, C, D, and E), 4~KB nodes (B, F, and I), and 1~KB
+      nodes (G and H).}
+    \label{fig:complex-map}
+  \end{center}
+\end{figure}
+
+Since the kernel mapping node is located in top of the mapping tree,
+it indicates that the kernel ``owns'' the whole physical address
+space, and may map any physical page frame to other address
+spaces.\footnote{An optimization of this approach is to also put a
+  mapping node for \sigmaz\ above the top-level root nodes.  This will
+  cause sigma$_0$ to own the whole physical address space, obviating
+  the need to put \sigmaz\ mapping nodes beneath almost all top-level
+  root nodes.  Parts of the physical address space may still be
+  removed from \sigmaz\ using the invalidation scheme presented in
+  Section~\ref{sec:Flushing}.}\@ When the kernel maps physical page
+frames to other address spaces, mapping nodes are created beneath the
+respective root nodes.  These mapping nodes may in turn map the page
+frame to other address spaces, or they may choose to map only part of
+the page frame (i.e., smaller page sizes).  If they choose to map
+smaller page sizes, a root node array is created below the mapping
+node, and mapping nodes for the new mappings are inserted below the
+respective root nodes.
+
+Figure~\ref{fig:complex-map} illustrates how a single 64~KB page frame
+can be mapped to a number of address spaces.  The mapping tree makes
+use of both 64~KB, 4~KB, and 1~KB mappings (these are all valid page
+sizes in the ARM architecture).  Mapping nodes are indicated by
+circles, and root nodes are indicated by arrays of rectangles.  It
+should be noted that it is perfectly legal for a node to create
+mappings to any of its parents.  The node, I, may for instance create
+a mapping to the address space of A.  Such an operation would simply
+insert another mapping node below node I.
+
+As mentioned above, different hardware architectures implement
+different page sizes.  The kernel programmer must therefore specify
+the number of page sizes, \texttt{NUM\_PAGESIZES}, that the hardware
+implements, and also the size of the different pages.  Page sizes are
+specified by declaring an array, \texttt{mdb\_pgshifts}, containing
+the ``shift-counts'' for the different pages (i.e., log$_2$ of the
+page size).  The declaration for the Intel x86 architecture would for
+instance look like the following:
+
+{\small
+\begin{verbatim}
+    #define NUM_PAGESIZES 2
+
+    dword_t mdb_pgshifts[NUM_PAGESIZES+1] = {
+        12,    // 4KB
+        22,    // 4MB
+        32     // 4GB (whole address space)
+    };
+\end{verbatim}
+}
+
+Note that the shift-counts must be listed in ascending order, and must
+for reasons of implementation simplicity be terminated by the
+shift-count for the whole address space.
+
+
+\subsection{Data Structures}
+
+It should be clear by now that any node (both root and mapping) may
+logically contain pointers to an arbitrary large number of mapping
+nodes in addition to an array of root nodes.  Some mechanism must
+exist for implementing this.  The solution is actually twofold: (1)
+providing recursive mapping trees, and (2) providing pointers to both
+a mapping node and a root node.
+
+\paragraph{Providing Recursive Mappings.}
+
+Root nodes and mapping nodes only contain a single pointer.  However,
+mapping nodes do also, in addition to the pointer, contain a depth
+counter which indicates how far down in the mapping tree the mapping
+node is located.  Using this counter, a whole tree of mapping nodes
+can be implemented as a singly linked list.
+
+\begin{figure}[tp]
+  \begin{center}
+    \subfigure[Logical interpretation of node pointers.]{%
+      \includegraphics{fig/figure.5}}%
+    \hspace{1cm}%
+    \subfigure[Actual interpretation of node pointers.  Nodes are
+    linked in the same order as a depth-first traversal.]{%
+      \includegraphics{fig/figure.6}}%
+    \caption[Logical vs.\ actual interpretation of node
+    pointers]{Logical vs.\ actual interpretation of node pointers.
+      Each node is marked with the depth it has in the mapping tree.}
+    \label{fig:maptree-linking}
+  \end{center}
+\end{figure}
+
+Figure~\ref{fig:maptree-linking} illustrates how the value of the
+depth counter is used to help the singly linked list be interpreted as
+a mapping tree.  The list of nodes is ordered in the same way as one
+would traverse the mapping tree in a depth-first manner.  As such, the
+order of the mapping nodes is well defined.  Finding all sibling nodes
+of a specific node can be accomplished by scanning the list rightwards
+until one reaches a node which has a depth count value which is equal
+or greater to the value in the starting node.  For example, scanning
+the nodes following node B would reveal that its sibling nodes are C
+and D (E has a depth count which is equal to B).  Removing a subtree
+from the mapping tree thus becomes a simple matter of traversing the
+list.  Inserting a new node is accomplished by inserting it directly
+following its parent node.
+
+\paragraph{Providing a Double Set of Pointers.}
+
+Keeping two pointers within each root node and mapping node is the
+easiest way of solving the double pointer problem.  This approach,
+however, would in general cause all nodes to grow by four bytes
+(assuming a 32-bit address space), which would have a drastic effect
+on the memory usage of the mapping database.  A better approach is to
+associate a special node (\texttt{dualnode\_t}) with each root node
+array.  The dual-node contains a pointer to the actual root node
+array, and also potentially a pointer to a mapping tree (i.e., to the
+mapping node being the root of the mapping tree).  Having a special
+node associated with each root node array is very memory efficient
+since each root node array typically consists of a large number of
+root nodes.  Moreover, the dual-node contains usage counters for the
+root node array.  These counters are necessary for cleaning up unused
+root node arrays after a flush operation (see
+Section~\ref{sec:Flushing}).
+
+
+\subsection{Mapping}
+
+Inserting a new mapping is the simplest operation that can be
+performed in the mapping database.  In short, the operation can be
+described in three steps:
+
+\begin{enumerate}
+\item Find the correct mapping node (the mapper) by indexing into root
+  node arrays, and parsing mapping node trees.  If no such mapping
+  node is found, cancel the map operation.
+\item If the mapping node represents a larger page size than the size
+  of the page to be mapped, create sibling root node arrays below the
+  mapping node until a root node array representing the correct page
+  size has been created.
+\item Insert the new mapping node (the mappee) directly below the
+  mapper (or directly below a root node in a root node array belonging
+  to the mapper).
+\end{enumerate}
+
+Searching for the right mapping node in step 1, may, of course,
+require a large number of mapping nodes and root nodes to be
+traversed.  It is still considered a conceptually simple operation
+though.
+
+
+\subsection{Flushing}
+\label{sec:Flushing}
+
+The real design difficulty of the mapping database is related to the
+operation of flushing pages.  In its simplest (and most used) form,
+the flush operation is not any harder than that of mapping pages.  For
+example, flushing node E in Figure~\ref{fig:complex-map} would only
+require traversing the mapping tree until the mapping node was found,
+delete the mapping node, and recursively deleting all of its sibling
+nodes (node F, G, H, I, and the three root node arrays).
+
+The problem with flushing arises when flushing a page size smaller
+than the page size represented by the current mapping node.  Consider,
+for example, the case when node A in Figure~\ref{fig:complex-map}
+wishes to flush a single 4~KB page within its 64~KB page.  It can not
+simply remove its sibling nodes since this would cause the whole 64~KB
+page to be flushed.  Some other mechanism must therefore be invented.
+
+\begin{figure}[t]
+  \begin{center}
+    \includegraphics{fig/figure.3}
+    \caption[Complex mapping tree with a 4~KB page flushed]{Complex
+      mapping tree with the first 4~KB page of node A flushed.  Light
+      gray nodes are partially invalid.  Dark gray crossed root nodes
+      are completely invalid.  Nodes B, F, G, and H are deleted.}
+    \label{fig:complex-map-4kb}
+  \end{center}
+\end{figure}
+
+An obvious solution to the problem is to create a root node array
+above node A, and populate its root nodes with basically the same
+mapping tree as the one found below node A.  Such an approach would,
+however, require the mapping tree below node A (including some root
+node arrays) to be duplicated a large number of times.  Furthermore,
+the code-complexity of the duplication algorithm would be quite high
+since not all nodes below A could be duplicated as is.  Node A and
+node E should for instance not contain a sibling root node array, and
+node B, F, G, H, and I should only be duplicated below some specific
+root nodes.  A better solution to the problem is presented in
+Figure~\ref{fig:complex-map-4kb}.
+
+In Figure~\ref{fig:complex-map-4kb}, only the nodes which are fully
+contained within the flushed page are deleted (node B, F, G, and H).
+The nodes which are only partly affected by the flush operation (node
+A, C, D, and E) are marked as \emph{partly invalid}.  Other nodes are
+not affected at all.  Since mapping nodes in this scheme can be marked
+as partly invalid, one must in some way be able to tell which parts of
+the node that are invalid.  This is achieved by marking the flushed
+root nodes in the associated root node arrays as \emph{invalid}.  If a
+particular partly invalid mapping node does not have a sibling root
+node array (i.e., node C and D), a root node array for this node have
+to be created.
+
+\begin{figure}[t]
+  \begin{center}
+    \includegraphics{fig/figure.4}
+    \caption[Complex mapping tree with a 1~KB page flushed]{Complex
+      mapping tree with the first 1~KB page of node A flushed.  Light
+      gray nodes are partially invalid.  Dark gray crossed root nodes
+      are completely invalid.  Node G is deleted. }
+    \label{fig:complex-map-1kb}
+  \end{center}
+\end{figure}
+
+Figure~\ref{fig:complex-map-1kb} depicts another example of flushing a 
+small part of a larger page.  In this example, a single 1~KB page is
+flushed out of a 64~KB page.  In general, the approach taken is the
+same as for flushing 4~KB pages.  The only difference is that fewer
+nodes are actually deleted, and some more sibling root node arrays
+need to be created.
+
+After a flush operation has been executed in the mapping database, it
+is expected that all involved page tables are updated.  As such, all
+deletions or partly invalidations of nodes must be followed up by page
+table modification in their associated tasks.  An architecture
+specific function, \texttt{pg\_flush()}, exists for this purpose.
+When a node is deleted or marked invalid, the mapping database invokes
+the function specifying the address space and the page frame affected.
+It is up to the \texttt{pg\_flush()} function to ensure that the
+appropriate page table entries are updated, and that any required TLB
+flush operations are executed.
+
+When invalidating root nodes or deleting mapping trees beneath root
+nodes, counters within the dual-node of the root node array are
+updated.  These counters are used for cleaning up data structures in
+the mapping database.  If all root nodes within a root node array are
+found to be empty, the root node array will be deleted.  If all root
+nodes within a root node array are found to be invalid, the root node
+array, the mapping node associated with the root node array, and the
+whole subtree below the mapping node are deleted.
+
+
+\subsection{Mapping Database Memory Management}
+
+The mapping database is itself responsible for allocating the fine
+grained buffers used for the different mapping database structures.
+The size of these fine grained buffers depends on the hardware
+architecture used.  In particular, they depend on the size of the root
+node arrays used, and the size of the mapping node structures.  The
+ARM architecture will for instance need to support root node arrays
+for 64~KB pages, 4~KB pages, and perhaps 1~KB pages.  The x86
+architecture, on the other hand, will only need to support root node
+arrays for 4~KB pages.
+
+\begin{figure}[tbp]
+  \begin{center}
+    \includegraphics{fig/figure.1}
+    \caption{Memory management in mapping database}
+    \label{fig:mdb-mem}
+  \end{center}
+\end{figure}
+
+Each of the different buffer sizes have an associated list of page
+frames (usually of 4~KB size) containing free buffers.  The first few
+bytes of each of these page frames are dedicated to management
+structures.  The rest of the frames contain the buffers proper (see
+Figure~\ref{fig:mdb-mem}).  The management structure is used to keep
+track of free buffers in the frame.  It contains: a pointer pointing
+to a list of free buffers, a counter keeping track of the number of
+free buffers, and a pointer to the next frame of free buffers.
+
+When a buffer is allocated from a frame, the buffer is removed from
+the list of free buffers, and the counter for the number of free
+buffers is decremented.  If the counter reaches zero, the whole frame
+is removed from the frame list.  This avoids further accesses to the
+frame when a new buffer is to be allocated.
+
+When a buffer is de-allocated, it is hooked into the buffer list of
+the frame it belongs to, and the counter of free buffers is
+incremented.  If the new counter value equals to one, it indicates
+that all the buffers in the frame was previously allocated.  This in
+turn implies that the page frame has been removed from the frame list.
+As such, we will have to hook it into the frame list
+again.\footnote{We may also choose to hook the frame into the frame
+  list when the counter reaches some higher value.  This will prohibit
+  the next allocate buffer operation to empty the buffer list and
+  remove the frame from the frame list.  Using such a scheme, there
+  will be less insertion/removal operations on the frame list.}\@ If
+the new counter value reaches its maximum (determined by the buffer
+size), it indicates that all the buffers in the frame have been freed.
+The frame may then be handed back to the kernel memory allocator, or
+it may be moved to the back of the frame list to make the frame less
+likely to be allocated from in the future.  This latter option is
+useful if we want to free the frame at some later stage.
+
+A buffer list can only contain equally sized buffers.  The kernel
+programmer must therefore specify the valid buffer sizes for a given
+architecture.  This is achieved by declaring an architecture specific
+array, \texttt{mdb\_buflists}, listing all valid buffer sizes.  The
+declaration for the x86 architecture would for instance look like the
+following:
+
+{\small
+\begin{verbatim}
+    mdb_buflist_t mdb_buflists[4] = {
+        { 12 },     // Mapping nodes, dualnode_t
+        { 4096 },   // 4KB root node arrays
+        { 0 }
+    };
+\end{verbatim}
+}
+
+The \texttt{mdb\_buflist\_t} structure contains all valid pointers and
+counters for manipulating frame lists.  When declaring the structures,
+however, only the first field of them (the size field) is set.  The
+rest of the fields are set during initialization.  A zero size buffer
+size is used as a termination criterion for the list.
+
+If the mapping database attempts to allocate a non-valid buffer size,
+a kernel panic will be raised.  Moreover, a buffer size which is
+greater or equal to the frame size can not be structured as lists
+within frames.  Requests for such buffers are therefore simply
+forwarded to the kernel memory allocator.  They still need to be
+declared in the \texttt{mdb\_buflists} array though.
+
+
+
+\section{Kernel Debugger}
+
+
+
+
+\chapter{Architecture Specific Issues}
+
+\section{Intel x86}
+
+\section{ARM/StrongARM}
+
+
+
+\end{document}
+
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: t
+%%% End: 

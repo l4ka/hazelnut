@@ -1,0 +1,650 @@
+include l4pre.inc 
+ 
+ 
+
+  Copyright GMD, L4.X2CTR.5, 19,01,97, 1
+ 
+;*********************************************************************
+;******                                                         ******
+;******         Kernel x2 Controller                            ******
+;******                                                         ******
+;******                                   Author:   J.Liedtke   ******
+;******                                                         ******
+;******                                   created:  19.01.97    ******
+;******                                   modified: 19.01.97    ******
+;******                                                         ******
+;*********************************************************************
+ 
+ 
+  public init_dual_processor
+  public prepare_dual_processor_init     
+  public dual_link_table
+  public generate_x2_info_page
+  public enter_single_processor_mode
+  public exit_single_processor_mode
+
+
+  extrn  init_default_kdebug:near,default_kdebug_exception:near
+  extrn  default_kdebug_end:byte
+  extrn  default_sigma0_stack2:dword,default_sigma0_start:near
+  extrn  default_sigma0_begin:byte,default_sigma0_end:byte
+  extrn  ktest0_stack2:dword,ktest0_start:near
+  extrn  ktest1_stack2:dword,ktest1_start:near
+  extrn  ktest_begin:byte,ktest_end:byte
+  
+  extrn  kernel_start_x2:near
+
+
+
+
+.nolist 
+include l4const.inc
+include l4kd.inc
+include adrspace.inc
+include intrifc.inc
+include uid.inc
+include tcb.inc
+include cpucb.inc
+include syscalls.inc
+include kpage.inc
+include apic.inc
+.list
+
+
+ok_for pentium,ppro
+
+ 
+ 
+;*********************************************************************
+;******                                                         ******
+;******         Dual Start                                      ******
+;******                                                         ******
+;******                                                         ******
+;*********************************************************************
+ 
+ 
+;;  icode
+
+  
+  assume ds:codseg 
+ 
+
+;----------------------------------------------------------------------------
+;
+;       dual link table
+;
+;----------------------------------------------------------------------------
+
+
+dual_link_table:
+
+  db    'L4',0E6h,'K'
+  db    current_kpage_version
+  db    0,0,0
+	dd	0,0
+
+  dd    init_default_kdebug,default_kdebug_exception ; 1010 ; kdebug
+  dd    0,default_kdebug_end
+
+  dd    default_sigma0_stack2,default_sigma0_start   ; 1020 ; sigma0 ESP, EIP
+  dd    default_sigma0_begin,default_sigma0_end
+
+  dd    0,0                                          ; 1030 ; sigma1 ESP, EIP
+  dd    0,0
+
+  dd    ktest0_stack2,ktest0_start                   ; 1040 ; booter ESP, EIP
+  dd    ktest_begin,ktest_end
+  dd    ktest1_stack2,ktest1_start                   ; 1050 ; sigma2 ESP, EIP
+  dd    ktest_begin,ktest_end
+
+  dd    0,0           ; main_mem                     ; 1060
+;;  dd    0,0           ; reserved_mem0 
+  dd    0,MB16        ; reserved_mem0 
+
+  dd    0,0           ; reserved_mem1                ; 1070
+  dd    0,0           ; dedicated_mem0 
+
+  dd    0,0           ; dedicated_mem1               ; 1080
+
+  dd    0A0000h,MB1   ; dedicated_mem2 
+
+  dd    0,0           ; dedicated_mem3               ; 1090
+  dd    0,0           ; dedicated_mem4 
+ ;; dd MB32,GB1
+
+  dd    0,0,0,0                                      ; 10A0 ; user clock
+
+
+
+
+;---------------------------------------------------------------------
+;
+;       single processor mutex
+;
+;---------------------------------------------------------------------
+
+single_processor_mutex    db 0FFh
+
+single_processor_depth    db 0
+
+
+
+
+;---------------------------------------------------------------------
+;
+;       init second processor
+;
+;---------------------------------------------------------------------
+; PRECONDITION:
+;
+;       protected mode
+;
+;       CS    executable & readable segment, starting at 0, size 4G
+;             USE32
+;       DS    readable & writable segment, starting at 0, size 4G
+;
+;       interrupts disabled
+;
+;---------------------------------------------------------------------
+
+
+
+prepare_dual_processor_init:
+ 
+  lea   eax,[esp-32*4]
+  mov   [initial_esp],eax
+  
+  sgdt  [initial_gdt_vec]
+  sidt  [initial_idt_vec]
+  mov   [initial_cs],cs
+  mov   [initial_ds],ds
+  str   [initial_tss]
+  
+  ret
+  
+
+
+
+
+init_dual_processor:
+
+  bt    ds:[cpu_feature_flags],on_chip_apic_bit
+  IFC
+  lno___prc eax
+  test  eax,eax
+  CANDZ 
+  
+        sub   eax,eax
+        mov   byte ptr ds:[eax],0E9h                 ; jmp   
+        mov   ebx,offset dual_processor_start-3
+        mov   word ptr ds:[eax+1],bx
+    
+        mov   ds:[local_apic+apic_icr],apic_startup_msg + 0
+
+        mov   eax,1000000
+        DO
+              dec   eax
+              REPEATNZ
+        OD
+  
+  FI        
+  ret
+  
+  
+
+
+;---------------------------------------------------------------------
+;
+;       dual processor start
+;
+;---------------------------------------------------------------------
+; PRECONDITION:
+;
+;       real mode
+;
+;       CS    0
+;
+;       interrupts disabled
+;
+;---------------------------------------------------------------------
+ 
+
+
+dual_processor_start:
+
+  asp
+  osp
+  mov   esp,cs:[initial_esp]
+  
+  asp
+  lgdt  cs:[initial_gdt_vec]
+  asp
+  lidt  cs:[initial_idt_vec]
+  
+  mov   eax,cr0
+  or    al,1
+  mov   cr0,eax
+    
+              osp 
+              db    0EAh                       ; jmp far
+              dd    offset protected_mode     
+initial_cs    dw 0
+
+
+protected_mode:
+
+  movzx eax,cs:[initial_ds]
+  mov   ds,eax   
+  mov   ss,eax
+  mov   es,eax
+  
+  sub   eax,eax
+  mov   fs,eax
+  mov   gs,eax
+  
+  mov   bl,1
+  lock  xadd  [processor_no],bl
+ 
+  IFA   bl,1
+        DO
+              hlt
+              REPEAT
+        OD
+  FI            
+  
+  movzx eax,[initial_tss]
+  mov   ecx,dword ptr [initial_gdt_vec+2]
+  and   byte ptr [eax+ecx+5],NOT (1 SHL (9-8)) ; reset busy bit in tss descriptor
+  
+  add   al,bl
+  ltr   ax
+  
+  jmp   kernel_start_x2
+  
+  
+  
+  
+     
+initial_ds          dw 0  
+
+initial_esp         dd 0    
+
+initial_gdt_vec     df 0
+initial_idt_vec     df 0
+        
+initial_tss         dw 0        
+
+processor_no        db 1
+    
+
+
+;---------------------------------------------------------------------
+;
+;       generate x2 info page
+;
+;---------------------------------------------------------------------
+; PRECONDITION:
+;
+;       EDX   processor number 
+;       EDI   old kernel info page (physical address)
+;
+;       DS,ES phys mem
+;
+;       interrupts disabled
+;
+;---------------------------------------------------------------------
+; POSTCONDITION:
+;
+;       EDI   new kernel info page (physical address}
+;
+;       EAX,EBX,ECX,EBP,ESI     scratch
+;
+;---------------------------------------------------------------------
+ 
+
+
+generate_x2_info_page:
+
+  mov   esi,offset dual_link_table
+
+  mov   eax,ds:[edi+main_mem].mem_begin
+  mov   ds:[esi+main_mem].mem_begin,eax
+  mov   eax,ds:[edi+main_mem].mem_end
+  mov   ds:[esi+main_mem].mem_end,eax
+  
+  mov   ch,kpage_mem_regions
+  DO
+        lea   ebx,[esi+reserved_mem0]
+        mov   cl,kpage_mem_regions
+        DO
+              IFAE  [ebx].mem_end,eax
+              CANDB [ebx].mem_begin,eax
+                    mov   eax,[ebx].mem_begin
+              FI
+              add   ebx,sizeof mem_descriptor
+              dec   cl
+              REPEATNZ
+        OD
+        dec   ch
+        REPEATNZ
+  OD            
+
+  mov   ebx,edi
+  lea   edi,[eax-KB4]
+  
+  
+  mov   ds:[esi+reserved_mem1].mem_begin,edi
+  IFB_  ds:[esi+reserved_mem1].mem_end,eax
+        mov   ds:[esi+reserved_mem1].mem_end,eax
+  FI
+
+
+  lno___prc eax                                                   
+  test  eax,eax                                
+  IFNZ                                         
+        DO
+              mov   eax,[ebx+cpu_clock_freq]   ; wait until first processor
+              test  eax,eax                    ; has determined cpu clock
+              REPEATZ                          ; frequency
+        OD                                     
+  FI            
+
+  
+  push  edi
+  
+  mov   ecx,offset user_clock
+  cld
+  rep   movsb
+  lea   esi,[ebx+user_clock]
+  mov   ecx,pagesize-offset user_clock
+  rep   movsb
+  
+  pop   edi
+           
+  mov   ds:[ebx+next_kpage_link],edi
+  
+  ret
+  
+
+
+
+;---------------------------------------------------------------------
+;
+;       enter/exit single processor mode
+;
+;---------------------------------------------------------------------
+; PRECONDITION:
+;
+;	      DS    phys mem
+;
+;---------------------------------------------------------------------
+
+
+
+
+enter_single_processor_mode:
+
+  push  eax
+  push  ecx
+    
+  lno___prc ecx
+  DO
+        mov   al,0FFh
+        lock  cmpxchg ds:[single_processor_mutex],cl
+        EXITZ
+        cmp   al,cl
+        REPEATNZ
+  OD
+  inc   ds:[single_processor_depth]            
+  
+  pop   ecx
+  pop   eax
+  ret
+  
+  
+exit_single_processor_mode:  
+  
+  dec   ds:[single_processor_depth]
+  IFZ
+        mov   ds:[single_processor_mutex],0FFh
+  FI
+  
+  ret
+        
+	
+
+
+;;  icod  ends
+
+
+
+;------------------------------------
+;
+;  IRQ10 on P6 dual workaround
+;
+;------------------------------------
+
+  public p6_workaround_init
+  public p6_workaround_open_irq
+  
+  
+  extrn  define_idt_gate:near
+  
+  
+  
+
+p6_workaround_init:
+
+  pushad
+  
+  lno___prc eax
+  test  eax,eax
+  IFZ
+        mov   eax,offset x9_handler+PM
+        mov   bl,20h+9
+        mov   bh,0 SHL 5
+        call  define_idt_gate
+  
+        mov   eax,offset x10_handler+PM
+        mov   bl,20h+10
+        mov   bh,0 SHL 5
+        call  define_idt_gate
+        
+        mov   eax,offset x11_handler+PM
+        mov   bl,20h+11
+        mov   bh,0 SHL 5
+        call  define_idt_gate
+  
+        mov   eax,offset x15_handler+PM
+        mov   bl,20h+15
+        mov   bh,0 SHL 5
+        call  define_idt_gate
+  FI      
+  
+  popad
+  ret
+  
+  
+  
+p6_workaround_open_irq:
+
+  push  eax
+  push  ecx
+  
+  mov   al,0FEh
+  IFAE  ecx,8
+        sub   ecx,8
+        in    al,0A1h
+        btr   eax,ecx
+        out   0A1h,al
+  ELSE_
+        in    al,21h
+        btr   eax,ecx
+        out   21h,al
+  FI
+  
+  pop   eax
+  pop   edx
+  ret        
+  
+  
+  
+  
+  
+  
+  
+wait_for_apic_ready:                  
+  
+  pushad
+  mov   edi,100000
+  DO
+        sub   eax,eax
+        
+        cpuid
+        mov   eax,ss:[local_apic+apic_icr]
+        test  eax,1 SHL 12
+        EXITZ
+        dec   edi
+        REPEATNZ
+        ke 'sa100000'
+  OD
+  popad      
+  ret
+  
+  
+x9_handler:
+
+  push  eax
+  
+  mov   eax,ss:[local_apic+apic_id]
+  xor   eax,01000000h
+  mov   ss:[local_apic+apic_icr+10h],eax
+  mov   dword ptr ss:[local_apic+apic_icr],4029h
+  
+  call  wait_for_apic_ready      
+  
+  pop   eax
+  iretd
+  
+  mov   al,0Bh            ; read isr
+  out   0A0h,al
+  jmp   $+2
+  jmp   $+2
+  in    al,0A0h
+  test  al,NOT (1 SHL (9-8))
+  IFZ
+        mov   al,60h+2
+        out   20h,al
+  FI      
+  mov   al,60h+9-8
+  out   0A0h,al
+  
+  pop   eax
+  iretd
+
+  
+  
+x10_handler:
+
+  push  eax
+  
+  mov   eax,ss:[local_apic+apic_id]
+  xor   eax,01000000h
+  mov   ss:[local_apic+apic_icr+10h],eax
+  mov   dword ptr ss:[local_apic+apic_icr],402Ah
+  
+  call  wait_for_apic_ready      
+  
+  pop   eax
+  iretd
+  
+  
+  mov   al,0Bh            ; read isr
+  out   0A0h,al
+  jmp   $+2
+  jmp   $+2
+  in    al,0A0h
+  test  al,NOT (1 SHL (10-8))
+  IFZ
+        mov   al,60h+2
+        out   20h,al
+  FI      
+  mov   al,60h+10-8
+  out   0A0h,al
+  
+  pop   eax
+  iretd
+  
+    
+
+x11_handler:
+
+  push  eax
+  
+  mov   eax,ss:[local_apic+apic_id]
+  xor   eax,01000000h
+  mov   ss:[local_apic+apic_icr+10h],eax
+  mov   dword ptr ss:[local_apic+apic_icr],402Bh
+  
+  call  wait_for_apic_ready      
+  
+  pop   eax
+  iretd
+  
+  
+  mov   al,0Bh            ; read isr
+  out   0A0h,al
+  jmp   $+2
+  jmp   $+2
+  in    al,0A0h
+  test  al,NOT (1 SHL (11-8))
+  IFZ
+        mov   al,60h+2
+        out   20h,al
+  FI      
+  mov   al,60h+11-8
+  out   0A0h,al
+  
+  pop   eax
+  iretd
+  
+    
+
+
+x15_handler:
+
+  push  eax
+  
+  mov   eax,ss:[local_apic+apic_id]
+  xor   eax,01000000h
+  mov   ss:[local_apic+apic_icr+10h],eax
+  mov   dword ptr ss:[local_apic+apic_icr],402Fh
+  
+  call  wait_for_apic_ready      
+  
+  pop   eax
+  iretd
+  
+  
+  mov   al,0Bh            ; read isr
+  out   0A0h,al
+  jmp   $+2
+  jmp   $+2
+  in    al,0A0h
+  test  al,NOT (1 SHL (15-8))
+  IFZ
+        mov   al,60h+2
+        out   20h,al
+  FI      
+  mov   al,60h+15-8
+  out   0A0h,al
+  
+  pop   eax
+  iretd
+  
+    
+
+
+
+  code ends
+  end

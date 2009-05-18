@@ -1,0 +1,52 @@
+default sigma0 entry point
+CONFIG_SIGMA0_ENTRY
+  Turning this on initializes the kernel info page with the given
+  values. Hence, there's no need for the boot process to write the
+  sigma0 initial IP and SP values to the kernel info page.
+
+  src/global.c
+
+default root task entry point
+CONFIG_ROOTTASK_ENTRY
+  Turning this on initializes the kernel info page with the given
+  values. Hence, there's no need for the boot process to write the
+  initial IP and SP values for the root task to the kernel info page.
+
+  src/global.c
+
+Use SYSENTER/SYSEXIT for IPC
+CONFIG_L4_SYSENTEREXIT
+  Turning this on uses the "sysenter" instruction for the IPC system
+  call. This currently works only with Jochen's version "Y". :-)
+  When switched off, the old-style "int $0x30" is used.
+
+  include/l4/x86/ipc.h
+
+Disable INTs in user mode
+CONFIG_USERMODE_NOIRQ
+  Setting this option to YES creates all user threads with disabled
+  interrupts. This could easily disable timer triggered events like
+  scheduling, IPC timeouts, etc.
+
+  create_user_stack_frame in include/arch/thread.h
+
+
+Trace kernel page faults
+CONFIG_DEBUG_TRACE_KPF
+  If set to yes, kernel page faults are reported.
+
+  src/arch/memory.c
+
+
+Trace user page faults
+CONFIG_DEBUG_TRACE_UPF
+  If set to yes, user page faults are reported.
+
+  src/arch/memory.c
+
+Trace interrupts
+CONFIG_DEBUG_TRACE_IRQS
+  If set, detection of an interrupt is reported
+
+  src/arch/interrupt.c
+

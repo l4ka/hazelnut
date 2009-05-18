@@ -1,0 +1,13 @@
+mainmenu_option next_comment
+comment 'Kernel Configuration'
+
+choice 'Kernel Interface Specification' \
+       'X.0	CONFIG_VERSION_X0	\
+	X.1	CONFIG_VERSION_X1' X.0
+
+bool 'Use new sigma0 RPC protocol' CONFIG_L4_NEWSIGMA0
+if [ "$CONFIG_L4_NEWSIGMA0" = "y" -a "$CONFIG_ARCH_X86" = "y" ]; then
+ bool 'Enable IO-FlexPages'  CONFIG_IO_FLEXPAGES n
+fi
+bool 'Use SYSENTER/SYSEXIT for IPC' CONFIG_L4_SYSENTEREXIT
+endmenu

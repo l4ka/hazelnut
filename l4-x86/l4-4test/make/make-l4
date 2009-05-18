@@ -1,0 +1,109 @@
+
+p={\liedtke\l4-4test\kernel\;\liedtke\l4-4test\kernifc\;\liedtke\l4-4test\userifc\}
+a=d:\liedtke\l4-4test\x86^\
+all_includes_x86= $(p)l4pre.inc $(p)l4const.inc $(p)l4kd.inc $(p)adrspace.inc $(p)adrspac5.inc $(p)tcb.inc $(p)cpucb.inc $(p)cpucb5.inc $(p)intrifc.inc $(p)pagcb.inc $(p)pagconst.inc $(p)pagmac.inc $(p)pnodes.inc $(p)schedcb.inc $(p)schedcb2.inc $(p)lbmac.inc $(p)syscalls.inc $(p)uid.inc $(p)kpage.inc $(p)msg.inc $(p)apic.inc
+
+
+ 
+
+$(a)adrsman5.obj : $(all_includes_x86) $(p)adrsman5.as5
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 adrsman5 as5
+  
+$(a)cpuctr5.obj : $(all_includes_x86) $(p)cpuctr5.as5
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 cpuctr5 as5
+  
+$(a)dispatch.obj : $(all_includes_x86) $(p)dispatch.asm
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 dispatch asm
+ 
+$(a)emuctr.obj : $(all_includes_x86) $(p)emuctr.asm
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 emuctr asm
+ 
+$(a)intctr.obj : $(all_includes_x86) $(p)intctr.asm
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 intctr asm
+ 
+$(a)ipcman5.obj : $(all_includes_x86) $(p)ipcman5.as5
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 ipcman5 as5
+ 
+$(a)kdebug.obj : $(all_includes_x86) $(p)kdebug.asm
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 kdebug asm           
+ 
+$(a)kdiopc.obj : $(all_includes_x86) $(p)kdiopc.asm
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 kdiopc asm
+ 
+$(a)kernel5.obj : $(p)kernel5.as5
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 kernel5 as5
+ 
+$(a)ktest5.obj : $(all_includes_x86) $(p)ktest5.as5
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 ktest5 as5
+ 
+$(a)memctr.obj : $(all_includes_x86) $(p)memctr.asm
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 memctr asm
+ 
+$(a)pagctr5.obj : $(all_includes_x86) $(p)pagctr5.as5
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 pagctr5 as5
+  
+$(a)pagfault.obj : $(all_includes_x86) $(p)pagfault.asm
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 pagfault asm
+ 
+$(a)pagmap5.obj : $(all_includes_x86) $(p)pagmap5.as5
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 pagmap5 as5
+ 
+$(a)sgmctr.obj : $(all_includes_x86) $(p)sgmctr.asm
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 sgmctr asm
+ 
+$(a)sigma0.obj : $(all_includes_x86) $(p)sigma0.asm
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 sigma0 asm
+ 
+$(a)start.obj : $(all_includes_x86) $(p)start.asm
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 start asm
+ 
+$(a)startpc.obj : $(all_includes_x86) $(p)startpc.asm
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 startpc asm
+ 
+$(a)tcbman.obj : $(all_includes_x86) $(p)tcbman.asm
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 tcbman asm 
+ 
+   
+$(a)l4.exe : $(a)adrsman5.obj $(a)cpuctr5.obj $(a)dispatch.obj $(a)emuctr.obj
+$(a)l4.exe : $(a)intctr.obj $(a)ipcman5.obj $(a)kdebug.obj $(a)kdiopc.obj
+$(a)l4.exe : $(a)kernel5.obj $(a)ktest5.obj $(a)memctr.obj $(a)pagctr5.obj
+$(a)l4.exe : $(a)pagfault.obj $(a)pagmap5.obj $(a)sgmctr.obj $(a)sigma0.obj
+$(a)l4.exe : $(a)start.obj $(a)startpc.obj $(a)tcbman.obj
+ @cd \liedtke\l4-4test\x86
+ @link /nologo @..\make\l4.rsp
+ pause
+ 
+
+
+$(a)boot.obj : $(all_includes_x86) $(p)boot.asm  
+  @cd \liedtke\l4-4test\x86
+  @..\make\ml-x86 boot asm 
+
+$(a)boot.com : $(a)boot.obj
+ @cd \liedtke\l4-4test\x86
+ link boot.obj/TINY,boot,boot.map
+
+ 
+
+
+
+ 

@@ -1,0 +1,8 @@
+
+% Prints a large "DRAFT" diagonally across each page
+% Does not show up in TeXview 
+
+\typeout{Prints "DRAFT" on each page; does not show in TeXView}
+\special{!userdict begin /bop-hook{gsave 200 30 translate
+65 rotate /Times-Roman findfont 200 scalefont setfont
+0 0 moveto 0.85 setgray (DRAFT) show grestore}def end}

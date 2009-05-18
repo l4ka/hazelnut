@@ -1,0 +1,9 @@
+crt0-x86.o: crt0-x86.S ../../apps/include/config.h
+sigma0.o: sigma0.c ../../apps/include/config.h sigma0-new.c \
+ ../../apps/include/l4/l4.h ../../apps/include/l4/arch/l4.h \
+ ../../apps/include/l4/arch/types.h \
+ ../../apps/include/l4/arch/kdebug.h \
+ ../../apps/include/l4/arch/syscalls.h \
+ ../../apps/include/l4/arch/ipc.h ../../apps/include/l4/arch/kernel.h \
+ ../../apps/include/l4/sigma0.h ../../apps/include/l4io.h \
+ ../../apps/include/stdarg.h

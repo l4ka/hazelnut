@@ -1,0 +1,37 @@
+L4/KA README
+Uwe Dannowski
+June 7 2000
+
+
+1. Getting Started
+
+ After obtaining the source tree (from CVS or as a tarball), go to the kernel
+directory and type make:
+
+  src/l4-ka > cd kernel
+  src/l4-ka/kernel > make
+
+ This should automatically invoke the XConfig tool to configure the kernel.
+The settings default to build an x86-X0-debug kernel. After finishing the
+configuration, click "Save and Exit" in XConfig. Then the kernel is built.
+ As a result of the build process, there should be a kernel image file
+x86-kernel (or whatever architecture you chose). That's all - copy the kernel
+image to your boot medium.
+
+The build process for the applications is quite similar - go to the apps
+ directory and type make there:
+
+  src/l4-ka > cd apps
+  src/l4-ka/apps > make
+
+ The XConfig tool for the applications is invoked. Make your selections with
+respect to the kernel settings (kernel version) and select the applications
+you want to build. When you're done with the configuration, click "Save and
+Exit" and the build process starts.
+ For now, the resulting binaries will reside in the respective subdirectories.
+Copy them to your boot medium and have fun.
+
+
+
+Please, direct comments, contributions, etc. to this README to:
+  Uwe.Dannowski@ira.uka.de

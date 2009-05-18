@@ -1,0 +1,917 @@
+include l4pre.inc 
+   
+  
+  Copyright GMD, L4.ADRSMAN.5, 16, 07, 96, 25
+   
+;*********************************************************************
+;******                                                         ******
+;******         Address Space Manager                           ******
+;******                                                         ******
+;******                                   Author:   J.Liedtke   ******
+;******                                                         ******
+;******                                   created:  07.03.90    ******
+;******                                   modified: 16.07.96    ******
+;******                                                         ******
+;*********************************************************************
+ 
+
+      
+  public init_adrsman
+  public create_kernel_including_task
+  public init_small_address_spaces
+  public update_proot
+  public attach_small_space
+  public get_small_space
+  public make_own_address_space_large
+  public set_small_pde_block_in_pdir
+  
+
+  extrn create_thread:near
+  extrn delete_thread:near
+  extrn insert_into_fresh_frame_pool:near
+  extrn flush_address_space:near
+  extrn gen_kernel_including_address_space:near
+  extrn define_idt_gate:near
+  extrn ipc_update_small_space_size:near
+
+
+.nolist
+include l4const.inc
+include adrspace.inc
+include intrifc.inc
+include uid.inc
+include tcb.inc
+include cpucb.inc
+include pagconst.inc
+include pagmac.inc
+include schedcb.inc
+include syscalls.inc
+include kpage.inc
+include pagcb.inc
+.list
+
+
+
+ok_for pentium,k6
+
+
+
+  assume ds:codseg
+
+
+
+
+
+
+;----------------------------------------------------------------------------
+;
+;       init address space manager
+;
+;----------------------------------------------------------------------------
+
+
+  icode
+
+
+
+init_adrsman:
+
+  mov   eax,kernel_task         ; ensuring that first ptab for pdir space
+  mov   ds:[highest_task],eax
+  
+  mov   bh,3 SHL 5
+
+  mov   bl,task_new
+  mov   eax,offset task_new_sc+PM
+  call  define_idt_gate
+
+  ret
+
+
+  icod  ends
+
+
+
+
+;----------------------------------------------------------------------------
+;
+;       task new sc
+;
+;       delete/create task (incl. creation of lthread 0 of new task
+;
+;----------------------------------------------------------------------------
+; PRECONDITION:
+;
+;       EAX      new chief / mcp
+;       ECX      initial ESP                             of lthread 0
+;       EDX      initial EIP                             of lthread 0
+;       EBX      pager.low
+;       EBP      pager.high
+;       ESI      task id.low
+;       EDI      task id.high
+;
+;----------------------------------------------------------------------------
+; POSTCONDITION:
+;
+;       ESI      new task id (low)     /    0
+;       EDI      new task id (high     /    0
+;
+;       ECX,EDX,ESI,EDI,EBP scratch
+;
+;       task created,
+;       lthread 0 created and started at PL3 with:
+;
+;                   EAX...EBP            0
+;                   ESP                  initial ESP
+;                   EIP                  initial EIP
+;                   DS...GS              linear space
+;                   CS                   linear space exec
+;
+;----------------------------------------------------------------------------
+
+
+task_new_failed:
+
+  ke    'tfail'
+
+  sub   esi,esi
+  sub   edi,edi
+
+  add   esp,4*4
+  iretd
+
+
+
+
+task_new_sc:
+
+  tpre  trap2,ds,es
+
+  and   esi,NOT mask lthread_no
+
+  push  esi
+  push  ebx
+  push  ebp
+
+  mov   ebp,esp
+  and   ebp,-sizeof tcb
+
+  mov   ebx,[ebp+myself]
+  xor   ebx,edi
+  test  ebx,mask chief_no
+  IFZ
+        mov   ebx,[ebp+chief]
+        cmp   ebx,mask depth
+        jae   task_new_failed
+        xor   ebx,edi
+        test  ebx,mask site_no
+  FI
+  jnz   task_new_failed
+
+  lea___tcb ebx,esi
+  test__page_present ebx
+  IFNC  ,,long
+  CANDNZ [ebx+coarse_state],unused_tcb,long
+
+        xor   esi,[ebx+myself]
+        test  esi,NOT (mask ver1 + mask ver0)
+        IFZ
+              cmp   [ebx+chief],edi
+        FI
+        jnz   task_new_failed
+
+
+        pushad                                  ;-------------------------
+                                                ;
+                                                ; delete task
+        mov   eax,[ebp+task_pdir]               ;              
+        mov   ds:[cpu_cr3],eax                  ;   If deleter has small address space,
+        mov   dword ptr ds:[tlb_invalidated],eax;   it might execute in to be deleted
+        mov   cr3,eax                           ;   pdir. Avoided by explicitly switching 
+                                                ;   to deleter's pdir.
+                                                ;
+        mov   edi,[ebx+task_pdir]               ;
+                                                ;
+        mov   cl,lthreads                       ;
+        DO                                      ;
+              test__page_present ebx            ;
+              IFNC                              ;
+                    mov   ebp,ebx               ;
+                    call  delete_thread         ;
+              FI                                ;
+              add   ebx,sizeof tcb              ;
+              dec   cl                          ;
+              REPEATNZ                          ;
+        OD                                      ;
+                                                ;
+        call  flush_address_space               ;
+                                                ;
+        add   edi,PM                            ;
+        mov   ecx,virtual_space_size SHR 22     ;
+        DO                                      ;
+              sub   eax,eax                     ;
+              cld                               ;
+              repe  scasd                       ;
+              EXITZ                             ;
+                                                ;
+              mov   eax,[edi-4]                 ;
+              call  insert_into_fresh_frame_pool;
+              REPEAT                            ;
+        OD                                      ;
+                                                ;
+        lea   eax,[edi-PM]                      ;
+        call  insert_into_fresh_frame_pool      ;
+                                                ;
+        popad                                   ;--------------------------
+
+
+  ELSE_
+
+        push  eax
+        push  ecx
+        
+        mov   eax,ds:[kernel_proot]
+        xpdir ecx,ebx
+        mov   eax,dword ptr [ecx*4+eax+PM]
+        test  al,page_present
+        CORZ
+              and   eax,-pagesize
+              xptab ecx,ebx
+              mov   eax,dword ptr [ecx*4+eax+PM]
+              test  eax,eax
+        IFZ
+              mov   eax,booter_task
+        FI            
+              
+        xor   eax,ebp
+        test  eax,mask task_no
+
+        pop   ecx
+        pop   eax
+        jnz   task_new_failed
+  FI
+
+ 
+  IFZ   <dword ptr [esp+4]>,0
+
+        and   eax,mask task_no
+        and   edi,NOT mask task_no
+        or    edi,eax
+
+        xpdir eax,ebx
+        shl   eax,2
+        add   eax,ds:[kernel_proot]
+        mov   eax,dword ptr [eax+PM]
+        test  al,page_present
+        IFZ
+              ke    'task_ptab'
+        FI
+        and   eax,-pagesize
+        xptab ebx,ebx
+        mov   dword ptr [ebx*4+eax+PM],edi
+              
+        add   esp,4*4
+        push  linear_space
+        pop   ds
+        push  linear_space
+        pop   es
+        iretd
+
+  FI
+
+  IFA   al,[ebp+max_controlled_prio]
+        mov   al,[ebp+max_controlled_prio]
+  FI
+  shl   eax,16
+  mov   ah,[ebp+prio]
+  mov   al,[ebp+timeslice]
+
+  IFA   esi,ds:[highest_task]
+        mov   ds:[highest_task],esi
+  FI 
+        
+  push  eax
+  push  ebx
+  push  ecx
+  mov   esi,ebx
+  mov   ebx,ds:[empty_proot]
+  mov   ecx,ebx
+  mov   al,0
+  call  update_proot
+  pop   ecx
+  pop   ebx
+  pop   eax
+
+  pop   edi
+  pop   esi
+
+  xchg  ebp,ebx
+  push  ebx
+  call  create_thread
+  pop   ebx
+
+  pop   esi
+
+  mov   [ebp+myself],esi
+  mov   eax,[ebx+myself]
+  mov   edi,[ebx+chief]
+  and   eax,mask task_no
+  and   edi,NOT mask task_no
+  or    edi,eax
+  IFNZ  eax,root_chief
+        add   edi,(1 SHL depth)
+  FI
+  mov   [ebp+chief],edi
+  
+    
+  tpost eax,ds,es
+
+
+
+
+
+
+
+  icode
+
+
+
+
+create_kernel_including_task:
+
+
+	IFNZ	[ebx].ktask_stack,0
+
+        lea___tcb ebp,eax
+
+        call  gen_kernel_including_address_space
+
+        push  eax
+
+        mov   ecx,[ebx].ktask_stack
+        mov   edx,[ebx].ktask_start
+        mov   eax,(255 SHL 16) + (16 SHL 8) + 10
+        mov   esi,sigma0_task
+        mov   edi,root_chief
+
+        call  create_thread
+
+        pop   ebx
+        mov   ecx,ebx
+        mov   al,0
+        mov   esi,ebp
+        call  update_proot
+  FI       
+
+  ret
+
+
+
+  icod  ends
+
+
+
+
+
+;----------------------------------------------------------------------------
+;
+;       update proot
+;
+;----------------------------------------------------------------------------
+; PRECONDITION:
+;
+;       AL    small as number
+;       EBX   task pdir
+;       ECX   thread proot
+;       ESI   tcb of task
+;
+;       DS    linear kernel space
+;
+;       paging enabled
+;
+;----------------------------------------------------------------------------
+; POSTCONDITION:
+;
+;       thread_proot set in all threads of task
+;
+;----------------------------------------------------------------------------
+
+
+update_proot:
+
+  push  esi
+  push  edx
+  
+  and   esi,-(lthreads*sizeof tcb)
+
+  mov   edx,lthreads
+  DO
+        IF    (lthreads*sizeof tcb) GT pagesize
+              test__page_writable esi
+              IFNC
+                    mov   [esi+thread_proot],ecx
+                    mov   [esi+task_pdir],ebx
+                    mov   [esi+small_as],al
+                    add   esi,sizeof tcb
+                    dec   edx
+                    REPEATNZ
+              FI
+              add   esi,pagesize
+              sub   edx,pagesize/sizeof tcb
+              REPEATA
+        ELSE            
+              mov   [esi+thread_proot],ecx
+              mov   [esi+task_pdir],ebx
+              mov   [esi+small_as],al
+              add   esi,sizeof tcb
+              dec   edx
+              REPEATNZ
+        ENDIF         
+  OD
+  
+  pop   edx
+  pop   esi
+  ret        
+
+
+
+
+
+
+
+
+;*********************************************************************
+;******                                                         ******
+;******                                                         ******
+;******         Small Address Space Handler                     ******
+;******                                                         ******
+;******                                                         ******
+;*********************************************************************
+ 
+
+
+
+
+
+
+ 
+;----------------------------------------------------------------------------
+;
+;       init small address spaces
+;
+;----------------------------------------------------------------------------
+; PRECONDITION:
+;
+;       DS     linear kernel space
+;
+;       paging enabled
+;
+;----------------------------------------------------------------------------
+
+
+  icode
+
+
+
+init_small_address_spaces:
+
+  mov   ds:[log2_small_space_size_DIV_MB4],22-22
+  mov   ds:[small_space_size_DIV_MB4],1
+  
+  sub   ebx,ebx
+  DO
+        mov   ds:[ebx*2+small_associated_task],0
+        inc   ebx
+        cmp   ebx,max_small_spaces
+        REPEATB
+  OD
+  
+  mov   cl,3                                   ; 32  MB
+  call  change_small_space_size
+
+  ret
+
+
+ 
+
+
+  icod ends
+
+
+
+;----------------------------------------------------------------------------
+;
+;       attach small space
+;
+;----------------------------------------------------------------------------
+; PRECONDITION:
+;
+;       AH    0 < small as no < small spaces     (attach small space)
+;             0 = small as no                    (detach small space)
+;
+;       ESI   a tcb (!) address of dest task
+;
+;       DS    linear kernel space
+;
+;----------------------------------------------------------------------------
+; POSTCONDITION:
+;
+;       EAX,ECX,EDI  scratch
+;
+;       ES,FS,GS     undefined
+;
+;----------------------------------------------------------------------------
+
+
+
+
+attach_small_space:
+
+  CORZ  ah,2
+  IFZ   ah,1
+        shl   ah,3+1
+        add   ah,32/4
+  FI
+        
+
+  mov   cl,-1
+  DO
+        inc   cl
+        shr   ah,1
+        REPEATA           ; NZ , NC
+  OD
+  IFNZ
+        shl   ah,cl
+        IFNZ  cl,ds:[log2_small_space_size_DIV_MB4]
+              call  change_small_space_size
+        FI
+  FI                    
+  
+  mov   ebp,esi
+  set___lthread ebp,0
+          
+  movzx eax,ah
+  movzx ecx,[esi+small_as]
+  
+  IFNZ  eax,ecx
+  
+        IFNZ  cl,0
+              call  detach_small_space
+        FI
+        
+        test  eax,eax
+        IFNZ
+              IFNZ  [(eax*4)+small_associated_task],0
+                    mov   ecx,eax
+                    call  detach_small_space
+              FI        
+              mov   [(eax*4)+small_associated_task],ebp
+        FI      
+        mov   ecx,eax
+  FI
+     
+  shl   ecx,22-16
+  IFNZ
+        add   ecx,(offset small_virtual_spaces SHR 16) + 0C0F30000h
+        xchg  cl,ch
+        ror   ecx,8
+	
+        push  ebx
+	      mov   ebx,[esi+task_pdir]
+	      call  update_proot
+        pop   ebx
+  
+        mov   eax,esp
+        xor   eax,esi
+        test  eax,mask task_no
+        jz    short update_own_address_space_small
+  FI
+  ret
+  
+  
+
+
+
+;----------------------------------------------------------------------------
+;
+;       detach small space
+;
+;----------------------------------------------------------------------------
+; PRECONDITION:
+;
+;       ECX   0 < small no < small spaces
+;
+;       DS    linear kernel space
+;
+;----------------------------------------------------------------------------
+
+
+
+
+detach_small_space:
+
+  push  esi
+  
+  mov   esi,[(ecx*4)+small_associated_task]
+  test  esi,esi
+  IFNZ
+        push  eax
+        push  ebx
+        push  ecx
+        
+        call  flush_small_pde_block_in_all_pdirs
+        
+        mov   eax,cr3
+        mov   cr3,eax
+        
+        mov   ebx,[esi+task_pdir]
+        mov   ecx,ebx
+        mov   al,0
+        call  update_proot
+        
+        mov   eax,esi
+        xor   eax,esp
+        test  eax,mask task_no
+        IFZ
+              call  make_own_address_space_large
+        FI      
+        
+        pop   ecx
+        pop   ebx
+        pop   eax
+  FI
+  
+  pop   esi
+  ret
+  
+
+
+;----------------------------------------------------------------------------
+;
+;       change own address space large <--> small
+;
+;----------------------------------------------------------------------------
+; update..small PRECONDITION:
+;
+;       ESI   task_proot address of current task
+;
+;       DS    linear kernel space
+;
+;----------------------------------------------------------------------------
+; make..large PRECONDITION:
+;
+;       DS    linear kernel space
+;
+;----------------------------------------------------------------------------
+; POSTCONDITION:
+;
+;       linar_space / exec      segment descriptor updated
+;       ES,FS,GS                reloaded
+;       DS                      unchanged
+;
+;       TLB flushed
+;            
+;       EAX,EDI scratch
+;
+;----------------------------------------------------------------------------
+  
+
+
+update_own_address_space_small:
+
+  mov   eax,[esi+thread_proot]
+  mov   edi,ds:[kernel_proot]
+  jmp   short update_cr3_and_seg_register
+  
+  
+  
+  
+make_own_address_space_large:
+
+  mov   edi,esp
+  and   edi,-sizeof tcb
+  
+  mov   edi,[edi+task_pdir]
+  mov   eax,00CCF300h
+  
+  
+  
+update_cr3_and_seg_register:
+
+  mov   ds:[cpu_cr3],edi
+  mov   cr3,edi
+  
+  mov   ds:[gdt+linear_space/8*8+4],eax
+  add   ah,0FBh-0F3h
+  mov   ds:[gdt+linear_space_exec/8*8+4],eax
+  
+  mov   eax,linear_space
+  mov   es,eax
+	sub	eax,eax
+  mov   fs,eax
+  mov   gs,eax
+  
+  ret
+  
+  
+
+
+;----------------------------------------------------------------------------
+;
+;       flush small page directory block in ALL pdirs
+;
+;----------------------------------------------------------------------------
+; PRECONDITION:
+;
+;       ECX   0 < small no < small spaces
+;
+;       DS    linear kernel space
+;
+;----------------------------------------------------------------------------
+; POSTCONDITION:
+;
+;       EAX   scratch
+;
+;----------------------------------------------------------------------------
+  
+  
+flush_small_pde_block_in_all_pdirs:
+
+  push  ebx
+  push  edx
+  push  edi
+  push  ebp
+      
+  mov   edx,kernel_task + offset tcb_space - lthreads*sizeof tcb
+  DO
+        add   edx,lthreads*sizeof tcb
+        cmp   edx,ds:[highest_task]
+        EXITA
+        
+        test__page_present edx
+        REPEATC
+        
+        mov   ebp,[edx+task_pdir]
+        
+        test  ebp,ebp
+        REPEATZ
+        
+        push  ecx
+        mov   bl,ds:[small_space_size_DIV_MB4]
+        mov   edi,ds:[linktab_base]
+        DO
+              sub   eax,eax
+              xchg  dword ptr [(ecx*4)+ebp+(offset small_virtual_spaces SHR 22)*4+PM],eax
+              inc   ecx
+              test  al,superpage
+              IFZ
+              shr   eax,log2_pagesize
+              CANDNZ
+              
+                    and   byte ptr [eax*linksize+edi].pdir_link,NOT 01h
+              FI      
+              dec   bl
+              REPEATNZ
+        OD
+        pop   ecx
+        REPEAT                
+  OD
+        
+  pop   ebp
+  pop   edi
+  pop   edx
+  pop   ebx
+  ret
+
+
+
+        
+
+
+
+
+;----------------------------------------------------------------------------
+;
+;       set small page directory entry in ONE pdir
+;
+;----------------------------------------------------------------------------
+; PRECONDITION:
+;
+;       ESI   source pde block addr
+;       EDI   dest pde block addr
+;
+;       DS    linear kernel space
+;
+;----------------------------------------------------------------------------
+; POSTCONDITION:
+;
+;       EAX,EBX,ECX,EDX,ESI,EDI,EBP   scratch
+;
+;----------------------------------------------------------------------------
+
+
+  
+  
+set_small_pde_block_in_pdir:
+
+  mov   cl,ds:[small_space_size_DIV_MB4]
+  mov   edx,ds:[linktab_base]
+  DO
+        mov   eax,[esi]
+        add   esi,4
+        mov   dword ptr [edi],eax
+        add   edi,4
+        test  al,superpage
+        IFZ
+        shr   eax,log2_pagesize
+        CANDNZ
+              or    byte ptr [eax*linksize+edx].pdir_link,01h
+        FI      
+        dec   cl
+        REPEATNZ
+  OD                    
+  
+  ret
+
+
+  
+;----------------------------------------------------------------------------
+;
+;       change small space size
+;
+;----------------------------------------------------------------------------
+
+
+change_small_space_size:
+
+  pushad
+ 
+  mov   ch,1
+  shl   ch,cl
+  mov   ds:[small_space_size_DIV_MB4],ch
+  
+  shl   ch,2
+  dec   ch
+  mov   byte ptr ds:[gdt+linear_space/8*8+1],ch               ; recall: 256 MB is max small_space_size            
+  mov   byte ptr ds:[gdt+linear_space_exec/8*8+1],ch            
+    
+  mov   ch,cl
+  xchg  cl,ds:[log2_small_space_size_DIV_MB4]
+  add   cl,22
+  add   ch,22
+  call  ipc_update_small_space_size
+  
+  popad
+  ret
+  
+
+
+
+  
+  
+;----------------------------------------------------------------------------
+;
+;       get small space
+;
+;----------------------------------------------------------------------------
+; PRECONDITION:
+;
+;       ESI   a tcb (!) address of dest task
+;
+;       DS    linear kernel space
+;
+;----------------------------------------------------------------------------
+; POSTCONDITION:
+;
+;       AL    small space / 0
+;
+;----------------------------------------------------------------------------
+
+
+
+
+get_small_space:
+
+        
+  lno___task eax,esi
+  mov   al,[esi+small_as]
+  
+  test  al,al
+  IFNZ
+        add   al,al
+        add   al,ds:[small_space_size_DIV_MB4]
+  FI      
+  
+  ret
+
+
+
+
+
+  
+  
+  
+
+
+        code ends
+        end

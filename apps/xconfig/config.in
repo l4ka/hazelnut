@@ -1,0 +1,12 @@
+mainmenu_name "L4/KA Userland Configuration"
+
+source arch.in
+
+source kernel.in
+
+# source debugger.in
+
+source apps.in
+
+endmenu
+

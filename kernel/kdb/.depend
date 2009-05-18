@@ -1,0 +1,156 @@
+print.o: print.c ../include/universe.h ../include/config.h \
+  ../include/macros.h ../include/types.h ../include/kernel.h \
+  ../include/x86/config.h ../include/x86/cpu.h ../include/lib.h \
+  ../include/sync.h ../include/x86/notify.h ../include/kmemory.h \
+  ../include/thread.h ../include/ipc.h ../include/tcb.h \
+  ../include/x86/tcb.h ../include/schedule.h ../include/interrupt.h \
+  ../include/x86/memory.h ../include/x86/mapping.h ../include/x86/space.h \
+  ../include/x86/thread.h ../include/tcb_layout.h ../include/kdebug.h \
+  ../include/x86/kdebug.h
+mini-kd.o: mini-kd.c ../include/universe.h ../include/config.h \
+  ../include/macros.h ../include/types.h ../include/kernel.h \
+  ../include/x86/config.h ../include/x86/cpu.h ../include/lib.h \
+  ../include/sync.h ../include/x86/notify.h ../include/kmemory.h \
+  ../include/thread.h ../include/ipc.h ../include/tcb.h \
+  ../include/x86/tcb.h ../include/schedule.h ../include/interrupt.h \
+  ../include/x86/memory.h ../include/x86/mapping.h ../include/x86/space.h \
+  ../include/x86/thread.h ../include/tcb_layout.h ../include/kdebug.h \
+  ../include/x86/kdebug.h ../include/mapping.h kdebug.h kdebug_keys.h
+gdb.o: gdb.c ../include/universe.h ../include/config.h \
+  ../include/macros.h ../include/types.h ../include/kernel.h \
+  ../include/x86/config.h ../include/x86/cpu.h ../include/lib.h \
+  ../include/sync.h ../include/x86/notify.h ../include/kmemory.h \
+  ../include/thread.h ../include/ipc.h ../include/tcb.h \
+  ../include/x86/tcb.h ../include/schedule.h ../include/interrupt.h \
+  ../include/x86/memory.h ../include/x86/mapping.h ../include/x86/space.h \
+  ../include/x86/thread.h ../include/tcb_layout.h ../include/kdebug.h \
+  ../include/x86/kdebug.h
+mdb.o: mdb.c ../include/universe.h ../include/config.h \
+  ../include/macros.h ../include/types.h ../include/kernel.h \
+  ../include/x86/config.h ../include/x86/cpu.h ../include/lib.h \
+  ../include/sync.h ../include/x86/notify.h ../include/kmemory.h \
+  ../include/thread.h ../include/ipc.h ../include/tcb.h \
+  ../include/x86/tcb.h ../include/schedule.h ../include/interrupt.h \
+  ../include/x86/memory.h ../include/x86/mapping.h ../include/x86/space.h \
+  ../include/x86/thread.h ../include/tcb_layout.h ../include/kdebug.h \
+  ../include/x86/kdebug.h ../include/mapping.h
+init.o: init.c ../include/universe.h ../include/config.h \
+  ../include/macros.h ../include/types.h ../include/kernel.h \
+  ../include/x86/config.h ../include/x86/cpu.h ../include/lib.h \
+  ../include/sync.h ../include/x86/notify.h ../include/kmemory.h \
+  ../include/thread.h ../include/ipc.h ../include/tcb.h \
+  ../include/x86/tcb.h ../include/schedule.h ../include/interrupt.h \
+  ../include/x86/memory.h ../include/x86/mapping.h ../include/x86/space.h \
+  ../include/x86/thread.h ../include/tcb_layout.h ../include/kdebug.h \
+  ../include/x86/kdebug.h
+input.o: input.c ../include/universe.h ../include/config.h \
+  ../include/macros.h ../include/types.h ../include/kernel.h \
+  ../include/x86/config.h ../include/x86/cpu.h ../include/lib.h \
+  ../include/sync.h ../include/x86/notify.h ../include/kmemory.h \
+  ../include/thread.h ../include/ipc.h ../include/tcb.h \
+  ../include/x86/tcb.h ../include/schedule.h ../include/interrupt.h \
+  ../include/x86/memory.h ../include/x86/mapping.h ../include/x86/space.h \
+  ../include/x86/thread.h ../include/tcb_layout.h ../include/kdebug.h \
+  ../include/x86/kdebug.h kdebug.h
+tracepoints.o: tracepoints.c ../include/universe.h ../include/config.h \
+  ../include/macros.h ../include/types.h ../include/kernel.h \
+  ../include/x86/config.h ../include/x86/cpu.h ../include/lib.h \
+  ../include/sync.h ../include/x86/notify.h ../include/kmemory.h \
+  ../include/thread.h ../include/ipc.h ../include/tcb.h \
+  ../include/x86/tcb.h ../include/schedule.h ../include/interrupt.h \
+  ../include/x86/memory.h ../include/x86/mapping.h ../include/x86/space.h \
+  ../include/x86/thread.h ../include/tcb_layout.h ../include/kdebug.h \
+  ../include/x86/kdebug.h
+new-kdb.o: new-kdb.c ../include/universe.h ../include/config.h \
+  ../include/macros.h ../include/types.h ../include/kernel.h \
+  ../include/x86/config.h ../include/x86/cpu.h ../include/lib.h \
+  ../include/sync.h ../include/x86/notify.h ../include/kmemory.h \
+  ../include/thread.h ../include/ipc.h ../include/tcb.h \
+  ../include/x86/tcb.h ../include/schedule.h ../include/interrupt.h \
+  ../include/x86/memory.h ../include/x86/mapping.h ../include/x86/space.h \
+  ../include/x86/thread.h ../include/tcb_layout.h ../include/kdebug.h \
+  ../include/x86/kdebug.h
+interrupt.o: interrupt.c ../include/universe.h ../include/config.h \
+  ../include/macros.h ../include/types.h ../include/kernel.h \
+  ../include/x86/config.h ../include/x86/cpu.h ../include/lib.h \
+  ../include/sync.h ../include/x86/notify.h ../include/kmemory.h \
+  ../include/thread.h ../include/ipc.h ../include/tcb.h \
+  ../include/x86/tcb.h ../include/schedule.h ../include/interrupt.h \
+  ../include/x86/memory.h ../include/x86/mapping.h ../include/x86/space.h \
+  ../include/x86/thread.h ../include/tcb_layout.h ../include/kdebug.h \
+  ../include/x86/kdebug.h
+tracing.o: tracing.c ../include/universe.h ../include/config.h \
+  ../include/macros.h ../include/types.h ../include/kernel.h \
+  ../include/x86/config.h ../include/x86/cpu.h ../include/lib.h \
+  ../include/sync.h ../include/x86/notify.h ../include/kmemory.h \
+  ../include/thread.h ../include/ipc.h ../include/tcb.h \
+  ../include/x86/tcb.h ../include/schedule.h ../include/interrupt.h \
+  ../include/x86/memory.h ../include/x86/mapping.h ../include/x86/space.h \
+  ../include/x86/thread.h ../include/tcb_layout.h ../include/kdebug.h \
+  ../include/x86/kdebug.h
+x86.o: x86.c ../include/universe.h ../include/config.h \
+  ../include/macros.h ../include/types.h ../include/kernel.h \
+  ../include/x86/config.h ../include/x86/cpu.h ../include/lib.h \
+  ../include/sync.h ../include/x86/notify.h ../include/kmemory.h \
+  ../include/thread.h ../include/ipc.h ../include/tcb.h \
+  ../include/x86/tcb.h ../include/schedule.h ../include/interrupt.h \
+  ../include/x86/memory.h ../include/x86/mapping.h ../include/x86/space.h \
+  ../include/x86/thread.h ../include/tcb_layout.h ../include/kdebug.h \
+  ../include/x86/kdebug.h ../include/tracepoints.h \
+  ../include/tracebuffer.h ../include/tracepoint_list.h kdebug.h
+asm-x86.o: asm-x86.S ../include/config.h ../include/x86/config.h \
+  ../include/x86/cpu.h ../include/tcb_layout.h
+x86_dis.o: x86_dis.c ../include/universe.h ../include/config.h \
+  ../include/macros.h ../include/types.h ../include/kernel.h \
+  ../include/x86/config.h ../include/x86/cpu.h ../include/lib.h \
+  ../include/sync.h ../include/x86/notify.h ../include/kmemory.h \
+  ../include/thread.h ../include/ipc.h ../include/tcb.h \
+  ../include/x86/tcb.h ../include/schedule.h ../include/interrupt.h \
+  ../include/x86/memory.h ../include/x86/mapping.h ../include/x86/space.h \
+  ../include/x86/thread.h ../include/tcb_layout.h ../include/kdebug.h \
+  ../include/x86/kdebug.h kdebug.h
+x86_input.o: x86_input.c ../include/universe.h ../include/config.h \
+  ../include/macros.h ../include/types.h ../include/kernel.h \
+  ../include/x86/config.h ../include/x86/cpu.h ../include/lib.h \
+  ../include/sync.h ../include/x86/notify.h ../include/kmemory.h \
+  ../include/thread.h ../include/ipc.h ../include/tcb.h \
+  ../include/x86/tcb.h ../include/schedule.h ../include/interrupt.h \
+  ../include/x86/memory.h ../include/x86/mapping.h ../include/x86/space.h \
+  ../include/x86/thread.h ../include/tcb_layout.h ../include/kdebug.h \
+  ../include/x86/kdebug.h kdebug.h
+x86_io.o: x86_io.c ../include/universe.h ../include/config.h \
+  ../include/macros.h ../include/types.h ../include/kernel.h \
+  ../include/x86/config.h ../include/x86/cpu.h ../include/lib.h \
+  ../include/sync.h ../include/x86/notify.h ../include/kmemory.h \
+  ../include/thread.h ../include/ipc.h ../include/tcb.h \
+  ../include/x86/tcb.h ../include/schedule.h ../include/interrupt.h \
+  ../include/x86/memory.h ../include/x86/mapping.h ../include/x86/space.h \
+  ../include/x86/thread.h ../include/tcb_layout.h ../include/kdebug.h \
+  ../include/x86/kdebug.h kdebug.h
+x86_profiling.o: x86_profiling.c ../include/universe.h \
+  ../include/config.h ../include/macros.h ../include/types.h \
+  ../include/kernel.h ../include/x86/config.h ../include/x86/cpu.h \
+  ../include/lib.h ../include/sync.h ../include/x86/notify.h \
+  ../include/kmemory.h ../include/thread.h ../include/ipc.h \
+  ../include/tcb.h ../include/x86/tcb.h ../include/schedule.h \
+  ../include/interrupt.h ../include/x86/memory.h ../include/x86/mapping.h \
+  ../include/x86/space.h ../include/x86/thread.h ../include/tcb_layout.h \
+  ../include/kdebug.h ../include/x86/kdebug.h
+x86_smp.o: x86_smp.c ../include/universe.h ../include/config.h \
+  ../include/macros.h ../include/types.h ../include/kernel.h \
+  ../include/x86/config.h ../include/x86/cpu.h ../include/lib.h \
+  ../include/sync.h ../include/x86/notify.h ../include/kmemory.h \
+  ../include/thread.h ../include/ipc.h ../include/tcb.h \
+  ../include/x86/tcb.h ../include/schedule.h ../include/interrupt.h \
+  ../include/x86/memory.h ../include/x86/mapping.h ../include/x86/space.h \
+  ../include/x86/thread.h ../include/tcb_layout.h ../include/kdebug.h \
+  ../include/x86/kdebug.h kdebug.h
+x86_tracestore.o: x86_tracestore.c ../include/universe.h \
+  ../include/config.h ../include/macros.h ../include/types.h \
+  ../include/kernel.h ../include/x86/config.h ../include/x86/cpu.h \
+  ../include/lib.h ../include/sync.h ../include/x86/notify.h \
+  ../include/kmemory.h ../include/thread.h ../include/ipc.h \
+  ../include/tcb.h ../include/x86/tcb.h ../include/schedule.h \
+  ../include/interrupt.h ../include/x86/memory.h ../include/x86/mapping.h \
+  ../include/x86/space.h ../include/x86/thread.h ../include/tcb_layout.h \
+  ../include/kdebug.h ../include/x86/kdebug.h

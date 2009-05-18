@@ -1,0 +1,39 @@
+/*
+ * Automatically generated C config: don't edit
+ */
+#define AUTOCONF_INCLUDED
+/*
+ * Architecture
+ */
+#define CONFIG_ARCH_X86 1
+#define CONFIG_ARCH_X86_I686 1
+#define CONFIG_IA32_FEATURE_PSE 1
+#define CONFIG_IA32_FEATURE_PGE 1
+#define CONFIG_IA32_FEATURE_SEP 1
+#define CONFIG_IA32_FEATURE_FXSR 1
+#define CONFIG_IA32_FEATURE_MSR 1
+#define CONFIG_IA32_FEATURE_CMOV 1
+/*
+ * Kernel Configuration
+ */
+#define CONFIG_X86_INKERNEL_PIC 1
+#define CONFIG_IO_FLEXPAGES 1
+/*
+ * Debug Configuration
+ */
+#define CONFIG_DEBUGGER_KDB 1
+#define CONFIG_DEBUGGER_IO_INCOM 1
+#define CONFIG_DEBUGGER_IO_OUTCOM 1
+#define CONFIG_DEBUGGER_COMPORT 0x3F8
+#define CONFIG_DEBUGGER_COMSPEED 115200
+#define CONFIG_DEBUGGER_IO_SCREEN_VGA 1
+#define CONFIG_DEBUG 1
+#define CONFIG_DEBUG_BREAKIN 1
+#define CONFIG_DEBUG_KDB_ONSTART 1
+/*
+ * Trace Settings
+ */
+#define CONFIG_DEBUG_TRACE_KPF 1
+#define CONFIG_DEBUG_TRACE_UPF 1
+#define CONFIG_DEBUG_TRACE_IPC 1
+#define CONFIG_DEBUG_TRACE_MDB 1

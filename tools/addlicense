@@ -1,0 +1,70 @@
+#!/usr/bin/perl
+######################################################################
+## Copyright (C) 2001,  Karlsruhe University
+##
+## File path:     addlicense
+## Description:   Add a license to files specified on the command
+##                line.
+##
+## @LICENSE@
+##
+## $Id: addlicense,v 1.1 2001/11/27 17:20:46 skoglund Exp $
+##
+######################################################################
+
+my @files, $license;
+
+
+## Parse args
+while ($arg = shift) {
+  if ($arg =~ /^-l$/) {
+    $license = shift;
+  } elsif ($arg =~ /^--?h(elp)?$/) {
+    USAGE ();
+  } else {
+    push (@files, $arg);
+  }
+}
+
+USAGE () unless @files;
+
+sub USAGE {
+  $0 =~ s,^(.*/),,;
+  print STDERR "USAGE: $0 [-l license] file...\n\n";
+  exit 1;
+}
+
+## Slurp whole files
+undef $/;
+
+
+## Get license
+if ($license) {
+  open (L, $license) || die "open ($license): $!\n";
+  $license = <L>;
+  close L;
+} else {
+  $license = <STDIN>;
+}
+
+$license =~ s/^\s*//;
+$license =~ s/\s*$//;
+
+
+## Modify files
+foreach $file (@files) {
+  open (F, $file) || die "open ($file): $!\n";
+  my $contents = <F>;
+  close F;
+
+  while ($contents =~ /(.*)\@LICENSE\@.*/) {
+    my $pfx = $1;
+    my $tmplicense = $license;
+    $tmplicense =~ s/^/$pfx/mg;
+    $contents =~ s/(.*)\@LICENSE\@.*/$tmplicense/;
+    open (NEW, "> $file.new") || die "open (> $file.new): $!\n";
+    print NEW "$contents" || die "write ($file.new): $!\n";
+    close NEW;
+    rename "$file.new", "$file" || die "rename $file.new, $file: $!\n";
+  }
+}

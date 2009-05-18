@@ -1,0 +1,14 @@
+
+Contents of src\userifc:
+
+  LN-external Include Files
+
+  Convention: A name "x" refers to file "x.inc" and is used for all LNs (486, Pentium).
+  
+
+msg            IPC message              Description + Constants
+syscalls       System Calls             Constants
+uid            Unique Ids (thread+task) Description, Constants, Macros
+
+
+Only the mentioned files and this file of src\userifc are supported.

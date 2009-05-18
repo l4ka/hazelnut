@@ -1,0 +1,67 @@
+mainmenu_option next_comment
+comment 'Base Applications'
+
+bool 'Build sigma0' CONFIG_BUILD_SIGMA0 Y
+if [ "$CONFIG_BUILD_SIGMA0" = "y" ]; then
+  if [ "$CONFIG_ARCH_ARM" = "y" ]; then
+    if [ "$CONFIG_ARCH_ARM_DNARD" = "y" ]; then
+      hex 'DNARD sigma0 base' LBS0_ARM_DNARD 0C000000
+    fi
+    if [ "$CONFIG_ARCH_ARM_BRUTUS" = "y" ]; then
+      hex 'Brutus sigma0 base' LBS0_ARM_BRUTUS D0000000
+    fi
+    if [ "$CONFIG_ARCH_ARM_PLEB" = "y" ]; then
+      hex 'PLEB sigma0 base' LBS0_ARM_PLEB C8020000
+    fi
+    if [ "$CONFIG_ARCH_ARM_IPAQ" = "y" ]; then
+      hex 'IPaq sigma0 base' LBS0_ARM_IPAQ D0000000
+    fi
+    if [ "$CONFIG_ARCH_ARM_EP7211" = "y" ]; then
+      hex 'EP7211 sigma0 base' LBS0_ARM_EP7211 C0400000
+    fi
+  fi
+  if [ "$CONFIG_ARCH_X86" = "y" ]; then
+    hex 'X86 sigma0 base' LBS0_X86 00020000
+  fi
+fi
+
+bool 'Build root task' CONFIG_BUILD_ROOTTASK Y
+if [ "$CONFIG_BUILD_ROOTTASK" = "y" ]; then
+  if [ "$CONFIG_ARCH_ARM" = "y" ]; then
+    if [ "$CONFIG_ARCH_ARM_DNARD" = "y" ]; then
+      hex 'DNARD root task base' LBRT_ARM_DNARD 0C100000
+    fi
+    if [ "$CONFIG_ARCH_ARM_BRUTUS" = "y" ]; then
+      hex 'Brutus root task base' LBRT_ARM_BRUTUS D0100000
+    fi
+    if [ "$CONFIG_ARCH_ARM_PLEB" = "y" ]; then
+      hex 'PLEB root task base' LBRT_ARM_PLEB C8040000
+    fi
+    if [ "$CONFIG_ARCH_ARM_IPAQ" = "y" ]; then
+      hex 'IPaq root task base' LBRT_ARM_IPAQ D0100000
+    fi
+    if [ "$CONFIG_ARCH_ARM_EP7211" = "y" ]; then
+      hex 'EP7211 root task base' LBRT_ARM_EP7211 C0500000
+    fi
+  fi
+  if [ "$CONFIG_ARCH_X86" = "y" ]; then
+    hex 'X86 root task base' LBRT_X86 00300000
+  fi
+fi
+
+if [ "$CONFIG_ARCH_X86" = "y" ]; then
+bool 'Build resource manager' CONFIG_BUILD_RMGR Y
+fi
+
+if [ "$CONFIG_ARCH_X86" = "y" ]; then
+  choice 'Putc output device' \
+       "screen	CONFIG_LIBIO_OUTSCRN	\
+	serial	CONFIG_LIBIO_OUTCOM" y
+
+  if [ "$CONFIG_LIBIO_OUTCOM" = "y" ]
+    hex 'Serial port address' CONFIG_LIBIO_COMPORT 3F8
+    int 'Serial port speed' CONFIG_LIBIO_COMSPEED 115200
+  fi
+fi
+
+endmenu

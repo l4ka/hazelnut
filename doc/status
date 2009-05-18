@@ -1,0 +1,68 @@
+status		(+ done, - todo, x toredo)
+
+* Initialization
+ + MMU + kernel PT
+ x memory allocator
+  - free operation
+ + sigma0 mappings
+ + sigma0 tcb
+ + kernel misc data / task table
+ + switch to sigma0
+ - scheduler init
+  - interrupt init
+  - timer init
+ - mapping database init
+
+* lthread_ex_regs
+ + activation of 'dead' threads
+  x allocate tcb
+  + insert into present queue
+  + insert into ready queue
+ - adjust alive threads
+ x return results
+
+* id_nearest
+ + return of own id
+ - return of nearest chief
+
+* thread_switch
+ + thread context switch
+ - thread state check
+ - task switch
+
+- other syscalls
+
+
+* data abort
+ x null tcb allocation
+ x new tcb allocation
+ - pager ipc
+
+
+
+next steps
+
+- basic same task short ipc
+ ; allows start of ipc path to be done
+
+-> simple non-preemptive same task thread switching and communication
+
+- task_new
+- pager ipc
+- fpages in ipc
+- task switch
+
+-> non-preemptive thread switching (intra/inter task) & address space construction
+
+; allows development to be split:
+	1. interrupts/timer
+	  -> ipc timeouts
+	  -> interrupt ipc
+	  -> preemptive scheduling
+	2. mapping db
+	  -> task delete
+	  -> unmap
+	3. long ipc
+
+
+

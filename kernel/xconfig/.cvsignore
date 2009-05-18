@@ -1,0 +1,5 @@
+.config
+config.h
+tkparse
+config.tk
+*.i *.ii *.s

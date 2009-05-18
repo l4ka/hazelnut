@@ -1,0 +1,221 @@
+# -*- mode: Makefile; -*-
+######################################################################
+##                
+## Copyright (C) 1999-2002,  Karlsruhe University
+##                
+## File path:     Makeconf
+## Description:   Central Makeconf gile
+##                
+## @LICENSE@
+##                
+## $Id: Makeconf,v 1.50 2002/01/24 21:12:37 ud3 Exp $
+##                
+######################################################################
+
+######################################################################
+# the root directory
+# this rule calculates the kernel source directory by looking for
+# the file Makeconf in the current and several parent directories
+
+TOPDIR = $(dir $(word 1,$(wildcard Makeconf $(addsuffix /Makeconf, .. ../.. ../../..))))
+
+# this checks for the Makeconf.local
+# we need it, so if it's not there, just rebuild it
+ifneq ($(wildcard $(TOPDIR)Makeconf.local), )
+
+######################################################################
+# this should be the very first rule
+
+_default: all
+
+
+######################################################################
+# local Makeconf file
+
+-include $(TOPDIR)Makeconf.local
+
+
+######################################################################
+# Platform specific parts
+
+ifeq ($(PLATFORM), dnard)
+CPPFLAGS	+= -mcpu=strongarm110
+DEFINES 	+= __CPU__=strongarm110
+ARCH		= arm
+else
+
+ifeq ($(PLATFORM), ep7211)
+CPPFLAGS	+= -mcpu=arm7tdmi
+DEFINES		+= __CPU__=arm720t EXCEPTION_VECTOR_RELOCATED
+ARCH		= arm
+else
+
+ifeq ($(PLATFORM), brutus)
+CPPFLAGS	+= -mcpu=strongarm1100
+DEFINES 	+= __CPU__=strongarm1100 EXCEPTION_VECTOR_RELOCATED
+ARCH		= arm
+else
+
+ifeq ($(PLATFORM), ipaq)
+CPPFLAGS	+= -mcpu=strongarm1100
+DEFINES 	+= __CPU__=strongarm1100 EXCEPTION_VECTOR_RELOCATED
+ARCH		= arm
+else
+
+ifeq ($(PLATFORM), pleb)
+CPPFLAGS      += -mcpu=strongarm1100 -save-temps -g
+DEFINES       += __CPU__=strongarm1100 EXCEPTION_VECTOR_RELOCATED
+ARCH          = arm
+else
+
+ifeq ($(PLATFORM), i586)
+ARCH		= x86
+CFLAGS		+= -march=i586
+else
+
+ifeq ($(PLATFORM), i686)
+ARCH		= x86
+CFLAGS		+= -march=i686
+else
+
+ifeq ($(PLATFORM), p4)
+ARCH		= x86
+CFLAGS		+= -march=i686
+else
+
+ifeq ($(PLATFORM), r4000)
+ARCH		= mips
+CFLAGS		+= -Wall -Wno-format -O9 -fomit-frame-pointer -mcpu=r4000 -G 0 -mno-abicalls -fno-pic -mips3 -mgp32
+#CFLAGS		+= -Wall -Wno-format -O9 -mcpu=r4000 -G 0 -mno-abicalls -fno-pic -mips3 -mgp32
+SFLAGS		+= -mips3
+
+else
+$(error fatal error: unknown platform "$(PLATFORM)". Change Makeconf.local)
+endif
+endif
+endif
+endif
+endif
+endif
+endif
+endif
+endif
+
+else
+PLATFORM=i686	# make make happy
+_default:
+	$(MAKE) xconfig
+	$(MAKE)
+	@exit 0
+endif
+
+######################################################################
+# Architecture specific parts
+
+SHELL	= bash
+ifeq ($(ARCH), arm)
+  ifneq ($(shell type -p arm-unknown-linux-gcc),)
+PREFIX		 = arm-unknown-linux-gnu-
+  else
+    ifneq ($(shell type -p arm-elf-gcc),)
+PREFIX		 = arm-elf-
+    else
+PREFIX		 = arm-linux-
+    endif
+  endif
+CFLAGS		+= -Wall -Wno-format -O2 -fomit-frame-pointer
+LDFLAGS		+= -Tlinker/$(PLATFORM).lds
+endif
+
+ifeq ($(ARCH), mips)
+PREFIX		= mips-
+endif
+
+ifeq ($(ARCH), x86)
+  ifneq ($(shell type -p i686-linux-gcc),)
+PREFIX		=i686-linux-
+  endif
+CFLAGS		+= -Wall -Wno-format -O9 -fomit-frame-pointer -freg-struct-return
+endif
+
+######################################################################
+# tools
+
+RM		= rm
+LN_S		= ln -s
+CC		= $(PREFIX)gcc
+#CC		= ~/work/gcc/bin/gcc
+DEPCC		= gcc
+LD		= $(PREFIX)ld
+OBJCOPY		= $(PREFIX)objcopy
+OBJDUMP		= $(PREFIX)objdump
+STRIP		= $(PREFIX)strip
+AR		= $(PREFIX)ar
+NM		= $(PREFIX)nm
+
+LIBGCCINC	= $(dir $(shell $(CC) --print-lib))include
+
+INCLUDES	+= $(TOPDIR)include $(LIBGCCINC)
+
+LIBGCC		 = $(dir $(shell $(CC) $(CFLAGS) --print-lib -))
+
+SFLAGS		+= -DASSEMBLY
+LDFLAGS		+= -N -Tlinker/$(ARCH).lds
+
+DEFINES		+= __ARCH__=$(ARCH)\
+		   __PLATFORM__=$(PLATFORM)
+
+CPPFLAGS 	+= -nostdinc -U$(ARCH) -U$(PLATFORM) $(addprefix -I, $(INCLUDES)) $(addprefix -D, $(DEFINES))
+
+CFLAGS		+= -x c++ -funsigned-char -funsigned-bitfields -fno-exceptions
+
+######################################################################
+# some evil magic
+
+ifeq ($(findstring -fomit-frame-pointer, $(CFLAGS)), -fomit-frame-pointer)
+DEFINES	+= NO_FRAME_POINTER
+endif	
+
+
+
+######################################################################
+# compile rules
+
+%.o:    %.S
+	$(CC) $(CPPFLAGS) $(SFLAGS) -o $@ -c $<
+
+%.o:	%.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ -c $<
+
+
+######################################################################
+# library rules
+LIB_OBJ	= $(patsubst %.S, %.o, $(patsubst %.c, %.o, $(LIB_SRC)))
+
+$(LIB): $(LIB_OBJ) Makefile
+	$(AR) -rcs $(LIB) $(LIB_OBJ)
+
+OBJ	= $(patsubst %.S, %.o, $(patsubst %.c, %.o, $(OBJ_SRC)))
+
+######################################################################
+# striptease
+
+%.stripped:	%
+	@chmod a+r $^
+	@chmod a-x $^
+	@cp -fp $^ $@
+	$(STRIP) $@
+
+######################################################################
+# dependencies
+
+.depend:	$(OBJ_SRC) $(LIB_SRC) Makefile
+	@echo Building dependencies in `pwd`
+	@$(DEPCC) $(CPPFLAGS) -o - -M $(OBJ_SRC) $(LIB_SRC) > $@
+
+
+######################################################################
+# cleanup
+
+celan clean::	
+	$(RM) -f *~ *.s *.o *.i *.ii *.s $(LIB)

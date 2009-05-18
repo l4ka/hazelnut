@@ -1,0 +1,25 @@
+######################################################################
+##                
+## Copyright (C) 1999, 2000, 2001,  Karlsruhe University
+##                
+## File path:     config.in
+## Description:   Main configuration specification file.
+##                
+## @LICENSE@
+##                
+## $Id: config.in,v 1.4 2001/11/22 15:57:34 skoglund Exp $
+##                
+######################################################################
+
+mainmenu_name "L4/KA Configuration"
+
+source arch.in
+
+source kernel.in
+
+source debugger.in
+
+source trace.in
+
+endmenu
+

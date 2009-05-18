@@ -1,0 +1,805 @@
+include l4pre.inc 
+ 
+  scode
+ 
+  Copyright GMD, L4.KTEST.5, 02,06,96, 15
+
+;*********************************************************************
+;******                                                         ******
+;******         Kernel Test                                     ******
+;******                                                         ******
+;******         Special Version for       Author:   J.Liedtke   ******
+;******         Cache Partitioning Tests                        ******
+;******                                                         ******
+;******         Attention: requires recomp of sigma0+memctr     ******
+;******                                                         ******
+;*********************************************************************
+ 
+include rtcache.inc
+ 
+  public ktest0_start
+  public ktest1_start
+  public ktest0_stack
+  public ktest1_stack
+  public ktest0_stack2
+  public ktest1_stack2
+  public ktest_begin
+  public ktest_end
+
+
+
+.nolist
+include l4const.inc
+include uid.inc
+include adrspace.inc
+include intrifc.inc
+include tcb.inc
+include msg.inc
+include cpucb.inc
+include schedcb.inc
+include lbmac.inc
+include pagmac.inc
+include syscalls.inc
+include kpage.inc
+include l4kd.inc
+.list
+include perfmon.inc
+
+
+
+
+ok_for pentium
+
+
+open_receive equ 1
+
+
+  assume ds:codseg
+
+
+ktest_begin   equ $
+
+
+ping_thread   equ (booter_thread+0*sizeof tcb)
+pong_thread   equ (sigma2_thread+0*sizeof tcb)  
+;ping_thread   equ booter_thread
+;pong_thread   equ (sigma2_thread+3*sizeof tcb)  
+;pong_thread   equ (sigma2_thread+sizeof tcb)
+;pong_thread   equ (booter_thread+sizeof tcb)
+
+
+  align 16
+
+              dd    31 dup (0)
+ktest0_stack  dd    0
+              dd    31 dup (0)
+ktest0_stack2 dd    0
+              dd    31 dup (0)
+ktest1_stack  dd    0
+              dd    31 dup (0)
+ktest1_stack2 dd    0
+
+
+ktest0_ready  db    false
+ktest1_ready  db    false
+
+
+
+
+
+
+;------------------------------------------------------
+;
+;       ping
+;
+;------------------------------------------------------
+
+
+  assume ds:codseg
+
+
+ktest0_start:
+
+
+
+
+
+
+  mov   ecx,1000
+  DO
+        push  ecx
+        sub   esi,esi
+        int   thread_switch
+        pop   ecx
+        dec   ecx
+        REPEATNZ
+  OD
+          
+
+ 
+columns       equ    matrix_columns
+
+.errnz  (pagesize/(columns*8)) * (columns / (pagesize/(columns*8))) - columns
+
+IF L2_cache_ways EQ 1
+
+  matrix_a      equ   (MB1)
+  matrix_b      equ   (matrix_a+MB16)
+
+  code_area     equ   (2*MB16)
+  
+ELSE
+
+  matrix_a      equ   (MB1)
+  matrix_b      equ   (matrix_a+MB4)
+
+  code_area     equ   (2*MB4)
+  
+ENDIF  
+  
+    
+
+
+
+  mov   edx,1
+  mov   ebx,edx
+  mov   esi,sigma0_task
+  mov   edi,esi
+  sub   eax,eax
+  mov   ecx,1000h+12*4+map_msg
+  int   ipc3
+
+
+  
+  mov   eax,0AA00010h + ((3*64/4*2+64/4) SHL 8)
+  mov   ebx,0FFFFFFFFh
+  mov   esi,sigma0_task
+  mov   edi,root_chief
+  int   thread_schedule
+
+
+  mov   eax,0AA00010h  + ((1*64/4*2+64/4) SHL 8)
+  mov   ebx,0FFFFFFFFh
+  mov   esi,pong_thread
+  mov   edi,root_chief
+  int   thread_schedule
+
+  mov   eax,0AA00010h  + ((2*64/4*2+64/4) SHL 8)
+  mov   ebx,0FFFFFFFFh
+  mov   esi,ping_thread
+  mov   edi,root_chief
+  int   thread_schedule
+  
+  
+  mov   ds:[ktest0_ready],true
+  
+  DO
+        sub   esi,esi
+        int   thread_switch
+        cmp   ds:[ktest1_ready],true
+        REPEATNZ
+  OD
+  
+        
+  kd____disp <13,10,'matrix: '>
+  mov   eax,columns
+  mov   ecx,eax
+  kd____disp <'  '>
+  kd____outdec
+  kd____disp <'x'>
+  kd____outdec
+  kd____disp <13,10>
+  
+  DO
+        mov   eax,ds:[1000h].cpu_clock_freq
+        add   eax,500000
+        sub   edx,edx
+        mov   ebx,1000000
+        div   ebx
+        mov   ds:[cycles_per_microsecond],eax
+        mov   ebx,eax
+        
+        mov   eax,ds:[intr_interval]
+        add   eax,25
+        mov   ds:[intr_interval],eax
+        IFA   eax,500
+        CANDNZ eax,10000000
+              kd____disp <13,10,'intr interval: '>
+              kd____inhex32
+              IFZ   eax,0
+                    mov   eax,25
+                    mov   ds:[intr_interval],eax
+              FI      
+        FI      
+        
+        kd____disp <13,10,'interval: '>
+        kd____outdec
+        kd____disp <' us'>
+        
+        imul  eax,ebx
+        mov   ebp,eax
+        
+        finit
+        
+        mov   ecx,columns        
+        mov   edi,matrix_a
+        call  gen_matrix
+        mov   edi,matrix_b
+        call  gen_matrix
+        
+        cli
+        
+        mov   ds:[ktest1_ready],false
+        
+        pushad
+        DO
+              mov   esi,pong_thread
+              int   thread_switch
+              cmp   ds:[ktest1_ready],true
+              REPEATNZ
+        OD
+        popad      
+
+        mov   esi,matrix_a
+        mov   edi,matrix_b
+       ; call  mul_matrix
+       
+        pushad
+        mov   esi,offset mul_matrix
+        mov   edi,code_area
+        mov   ecx,offset mul_matrix_end - offset mul_matrix
+        cld
+        rep   movsb
+        popad
+        
+        rdtsc
+        mov   ds:[cycles],eax
+        
+        mov   eax,code_area
+        call  eax                         
+        
+        
+              
+        
+        kd____disp <' time: '>
+        rdtsc
+        sub   eax,13
+        sub   eax,ds:[cycles]
+        mov   ds:[cycles],eax
+        IFZ   ds:[best_cycles],0
+              mov   ds:[best_cycles],eax
+        FI      
+        push  eax
+        sub   edx,edx
+        mov   ebx,ds:[cycles_per_microsecond]
+        imul  ebx,1000
+        call  outdec2
+        kd____disp <' ms  ('>
+        pop   eax                                                   
+        mov   ebx,eax
+        mov   eax,columns*columns*columns
+        xchg  eax,ebx
+        call  outdec2
+        kd____disp <' cy/it, '>
+        mov   eax,ds:[vec_mults_sum]
+        add   eax,ds:[vec_mults]
+        mov   ebx,ds:[intrs]
+        IFZ   ebx,0
+              inc   ebx
+        FI      
+        call  outdec2
+        kd____disp <' vm/int) unpred: '>
+        
+        mov   eax,ds:[cycles]
+        sub   edx,edx
+        mov   ebx,ds:[best_cycles]
+        sub   eax,ebx
+        call  outdec2
+        
+        
+        
+  
+        REPEAT
+  OD
+
+
+        align 16
+        
+std_value     dq    1.0
+fzero         dq    0.0
+result        dq    0.0
+
+cycles        dd    0
+
+intr_clock    dd    0
+vec_mults     dd    0
+vec_mults_sum dd    0
+intrs         dd    0
+intr_interval dd    10000000-25
+best_cycles   dd    0
+filter_t      dd    0
+
+cycles_per_microsecond dd 0
+
+
+
+gen_matrix:
+
+  push  ecx
+  push  edi
+  
+  mov   eax,ecx
+  imul  ecx
+  DO
+        mov   ebx,dword ptr ds:[std_value]
+        mov   ecx,dword ptr ds:[std_value+4]
+        mov   [edi],ebx
+        mov   [edi+4],ecx
+        add   edi,8
+        dec   eax
+        REPEATNZ
+  OD
+  
+  pop   edi
+  pop   ecx
+  ret
+  
+  
+  
+mul_matrix:
+
+  mov   ecx,columns / (pagesize/(columns*8))
+  
+  push  esi
+  push  edi
+  
+  sub   eax,eax
+  mov   ds:[vec_mults],eax  
+  mov   ds:[vec_mults_sum],eax
+  mov   ds:[intrs],eax
+  
+  rdtsc
+  mov   ds:[intr_clock],eax
+  DO
+        push  ecx
+        push  esi
+        push  edi
+        
+        mov   ecx,columns
+        DO
+              push  ecx
+              push  esi
+              push  edi
+        
+              mov   ecx,pagesize/(columns*8) 
+              DO
+                    push  ecx
+                    mov   ecx,columns
+                    fld   qword ptr ds:[fzero]
+                    jmp   short xx
+                    
+                    DO
+                          faddp st(1),st
+                      xx: 
+                          fld   qword ptr [ecx*8+esi-8]
+                          fmul  qword ptr [ecx*8+edi-8]
+                          fld   qword ptr [ecx*8+esi-16]
+                          fmul  qword ptr [ecx*8+edi-16]
+                          fxch  st(1)
+                          faddp st(2),st
+                          fld   qword ptr [ecx*8+esi-24]
+                          fmul  qword ptr [ecx*8+edi-24]
+                          fxch  st(1)
+                          faddp st(2),st
+                          fld   qword ptr [ecx*8+esi-32]
+                          fmul  qword ptr [ecx*8+edi-32]
+                          fxch  st(1)
+                          faddp st(2),st
+                          
+                          sub   ecx,4
+                          REPEATNZ
+                    OD
+                    faddp st(1),st
+                    fstp  qword ptr ds:[result]
+        
+                    rdtsc
+                    sub   eax,13
+                    sub   ds:[cycles],eax
+                    
+                    inc   ds:[vec_mults]
+             
+                    rdtsc
+                    sub   eax,ds:[intr_clock]
+                    sub   eax,ebp
+                    IFAE  
+                          inc   ds:[intrs]
+                          sub   ebx,ebx
+                          xchg  ds:[vec_mults],ebx
+                          add   ds:[vec_mults_sum],ebx
+                          
+                          IF    interfering_with EQ filter
+                                mov   ebx,eax
+                                rdtsc
+                                sub   eax,ebx
+                                mov   ds:[intr_clock],eax
+                                
+                                rdtsc
+                                add   ds:[cycles],eax         
+                          ENDIF      
+                          
+                          pushad
+                          mov   esi,pong_thread
+                          int   thread_switch
+                          popad
+                          
+                          IF    interfering_with EQ filter
+                                jmp   xxxx
+                          ENDIF      
+                          
+                          IF    interfering_with EQ flooder
+                                mov   ebx,eax
+                                rdtsc
+                                sub   eax,ebx
+                                mov   ds:[intr_clock],eax
+                          ENDIF      
+                    FI      
+                    
+                    rdtsc
+                    add   ds:[cycles],eax
+               xxxx:     
+                    pop   ecx
+                    add   edi,columns*8                       
+                    dec   ecx
+                    REPEATNZ
+              OD
+        
+              pop   edi
+              pop   esi
+              pop   ecx
+                      
+              add   esi,columns*8
+              dec   ecx
+              REPEATNZ
+        OD
+        
+        pop   edi
+        pop   esi
+        pop   ecx
+        
+        add   edi,(pagesize/(columns*8)) * (columns*8)
+        dec   ecx
+        REPEATNZ        
+              
+  OD
+  
+  pop   edi
+  pop   esi 
+  ret        
+         
+         
+mul_matrix_end      equ $         
+
+  
+
+
+outdec2:
+
+  pushad
+
+  sub   edx,edx
+  div   ebx
+  kd____outdec
+  mov   al,'.'
+  kd____outchar
+  imul  eax,edx,200
+  add   eax,ebx
+  shr   eax,1
+  sub   edx,edx
+  div   ebx
+  mov   edx,eax
+  IFB_  edx,10
+        mov   al,'0'
+        kd____outchar
+  FI
+  mov   eax,edx
+  kd____outdec
+
+  popad
+  ret
+
+
+
+
+
+;------------------------------------------------------
+;
+;       pong
+;
+;------------------------------------------------------
+
+
+filter_area   equ 12*MB1 + L2_cache_colors/2*pagesize
+
+ktest1_start:
+
+  DO
+        sub   esi,esi
+        int   thread_switch
+        cmp   ds:[ktest0_ready],true
+        REPEATNZ
+  OD
+
+
+  IF interfering_with EQ none
+  
+        jmp   ktest1_start
+        
+  ENDIF
+  
+         
+
+
+  IF interfering_with EQ flooder
+  
+        mov   edi,12*MB1
+        mov   ecx,2*KB4-1
+        mov   al,90h
+        cld
+        rep   stosb
+        mov   byte ptr [edi],0C3h
+              
+              
+        cli
+        DO                    
+              mov   edi,12*MB1
+              call  edi
+              mov   ecx,2*KB4/4; KB256/4
+              DO
+                    IF (cache_strategy EQ write_through) OR (partitioning_strategy EQ single_writer_partitioned)
+                          mov   eax,[edi]
+                    ELSE  
+                          add   dword ptr ds:[edi],0
+                    ENDIF      
+                    mov   eax,[edi]
+                    add   edi,32
+                    sub   ecx,32/4
+                    REPEATA
+              OD
+              IF partitioning_strategy EQ single_writer_partitioned
+                    mov   edi,12*MB1      
+                    mov   ecx,2*KB4/4
+                    DO
+                          add   dword ptr [edi],0
+                          add   edi,32
+                          sub   ecx,32/4
+                          REPEATA
+                    OD
+              ENDIF      
+              
+              mov   ds:[ktest1_ready],true
+              
+              mov   esi,ping_thread
+              int   thread_switch
+              
+              REPEAT        
+        OD        
+  ENDIF
+  
+  
+  
+  IF interfering_with EQ filter
+  
+        
+        mov   edi,12*MB1+3*pagesize
+        mov   esi,offset filter_loop
+        mov   ecx,offset filter_end - offset filter_loop
+        cld
+        rep   movsb
+
+
+        mov   edi,filter_area
+        mov   eax,filtersize*2
+        DO
+              mov   ebx,dword ptr ds:[std_value]
+              mov   ecx,dword ptr ds:[std_value+4]
+              mov   [edi],ebx
+              mov   [edi+4],ecx
+              add   edi,8
+              dec   eax
+              REPEATNZ
+        OD
+        
+        sub   eax,eax
+        mov   ds:[filter_t],eax
+        
+        cli
+        
+        mov   edi,12*MB1+3*pagesize
+        jmp   edi
+        
+        
+  filter_loop:
+         
+        DO
+              mov   eax,ds:[filter_t]
+              inc   eax
+              IFAE  eax,filtersize
+                    sub   eax,eax
+              FI
+              mov   ds:[filter_t],eax
+                    
+              mov   edi,filter_area
+              lea   esi,[eax*8+edi+filtersize*8]
+              mov   ecx,filtersize 
+        
+              fld   qword ptr ds:[fzero]
+              jmp   short xx1
+        
+              DO
+                    faddp st(1),st
+                xx1: 
+                    fld   qword ptr [esi]
+                    fmul  qword ptr [edi]
+                    fld   qword ptr [esi+8]
+                    fmul  qword ptr [edi+8]
+                    fxch  st(1)
+                    faddp st(2),st
+                    fld   qword ptr [esi+16]
+                    fmul  qword ptr [edi+16]
+                    fxch  st(1)
+                    faddp st(2),st
+                    fld   qword ptr [esi+24]
+                    fmul  qword ptr [edi+24]
+                    fxch  st(1)
+                    faddp st(2),st
+                    
+                    add   esi,4*8
+                    add   edi,4*8
+                    IFB_  esi,filter_area+2*(filtersize*8)
+                          sub   ecx,4
+                          REPEATNZ
+                    ELSE_
+                          sub   esi,filtersize*8
+                          sub   ecx,4
+                          REPEATNZ
+                    FI            
+              OD
+              faddp st(1),st
+              fstp  qword ptr [result]
+              add   dword ptr [esi],0
+              
+              mov   ds:[ktest1_ready],true
+              
+              mov   esi,ping_thread
+              int   thread_switch
+              
+              REPEAT
+        OD           
+        
+        
+  filter_end  equ $        
+        
+        
+  ENDIF               
+ 
+ 
+ 
+
+
+
+
+
+timer_counter        equ 40h
+timer_control        equ 43h
+
+counter0_mode0_16_cmd   equ 00110000b
+counter0_mode2_16_cmd   equ 00110100b
+counter0_mode3_16_cmd   equ 00110110b
+counter0_latch_cmd      equ 00000000b
+
+
+
+
+timer_start macro
+
+mov al,counter0_mode0_16_cmd
+out [timer_control],al
+jmp $+2
+jmp $+2
+mov al,0FFh
+out [timer_counter],al
+jmp $+2
+jmp $+2
+out [timer_counter],al
+endm
+
+
+
+timer_stop macro
+
+mov al,counter0_latch_cmd
+out [timer_control],al
+jmp $+2
+jmp $+2
+in  al,[timer_counter]
+mov ah,al
+jmp $+2
+jmp $+2
+in  al,[timer_counter]
+xchg ah,al
+neg  ax
+movzx eax,ax
+lea  eax,[eax+eax-1]
+imul eax,(1000*1000/1193)/2
+endm
+
+
+  align 16
+
+
+
+microseconds:
+
+  pushad
+
+  sub   edx,edx
+  div   ebx
+  kd____outdec
+  mov   al,'.'
+  kd____outchar
+  imul  eax,edx,200
+  add   eax,ebx
+  shr   eax,1
+  sub   edx,edx
+  div   ebx
+  mov   edx,eax
+  IFB_  edx,10
+        mov   al,'0'
+        kd____outchar
+  FI
+  mov   eax,edx
+  kd____outdec
+  kd____disp  <' us'>
+
+  popad
+  ret
+
+
+
+
+
+
+;----------------------------------------------------------------------------
+;
+;       get real time clock
+;
+;----------------------------------------------------------------------------
+; POSTCONDITION:
+;
+;       EAX    ms (low)
+;
+;----------------------------------------------------------------------------
+
+        align 16
+
+
+get_rtc:
+
+  mov   eax,ds:[user_clock+1000h]
+  ret
+
+
+
+
+
+
+
+
+
+ktest_end     equ $
+
+
+  scod  ends
+
+  code  ends
+  end

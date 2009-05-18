@@ -1,0 +1,71 @@
+#!/usr/bin/perl
+######################################################################
+##
+## Copyright (C) 2001,  Karlsruhe University
+##
+## File path:     transmap
+## Description:   Take a mapfile and translates input from stdin or
+##                files on cmdline so that the output contains
+##                function names with offsets.  All input lines which
+##                starts with a hex value is assumed to be an address
+##                to be translated.
+##
+## This program is free software; you can redistribute it and/or
+## modify it under the terms of the GNU General Public License
+## as published by the Free Software Foundation; either version 2
+## of the License, or (at your option) any later version.
+##
+## This program is distributed in the hope that it will be useful,
+## but WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+## GNU General Public License for more details.
+##
+## You should have received a copy of the GNU General Public License
+## along with this program; if not, write to the Free Software
+## Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA
+## 02111-1307, USA.
+##
+## $Id: transmap,v 1.2 2001/03/01 14:34:48 skoglund Exp $
+##
+######################################################################
+
+$mapfile = shift;
+
+$0 =~ s,^.*/(.*),\1,;
+$mapfile || die "USAGE: $0 mapfile [files...]\n";
+
+sub get_func {
+  my $value = shift;
+  my $count = shift;
+  my $addr, $prevaddr, $prevname;
+
+  open(MAPFILE, "$mapfile") || die "open($mapfile): $!";
+  $prevaddr = 0;
+  $prevname = "<start>";
+
+  while ( <MAPFILE> ) {
+    ($addr, $name) = /(\S+) . (.*)/;
+    last if hex($addr) > hex($value);
+    ($prevaddr, $prevname) = ($addr, $name);
+  }
+
+  close MAPFILE;
+
+  $counters{$prevname} = $counters{$prevname} + $count if $count;
+  sprintf("  %-32s", sprintf("%s+%x:", $prevname, hex($value)-hex($prevaddr)));
+}
+
+
+while (<>) {
+  $line = $_;
+  ($addr) = ($line =~ /^\s*([a-fA-F0-9]+):/);
+  ($count) = ($line =~ /^\s*[a-fA-F0-9]+:\s*(\d+)/);
+  $name = get_func($addr, $count);
+  $line =~ s/^\s*([a-fA-F0-9]+):/$name/eg;
+  print "$line";
+}
+
+print "\n";
+foreach $name ( sort { $counters{$b} <=> $counters{$a} } keys %counters ) {
+  printf("  %-32s %d\n", "$name:", $counters{$name});
+}

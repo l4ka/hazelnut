@@ -1,0 +1,296 @@
+Current Design ideas
+====================
+
+Memory Allocation: (Espen)
+------------------
+
+3 general frame sizes must be allocatable:
+	16KB frames for page table directories
+	4KB frames for TCB's
+	1KB frames for page table leaves
+
+3 Other frame sizes are required for the mapping database:
+	256B frames for 64KB/4KB mapping arrays nodes
+	32B frames for 1KB mapping arrays nodes
+	8B for single mapping nodes
+
+Currently we have a once-off allocator that can allocate (2^n)KB frames. We can use this and have a suballocator in the mapping database for its smaller frame sizes but its only temporary since its once off. Ideally we want to be able to free allocations and have smaller frame sizes merge when we run out of larger frame sizes. A buddy system is idea for this type of slab allocation. Once we can free allocations (fpage_unmap frees mapping database allocations/task delete frees the other 1/4/16KB allocations) a buddy system allocator should be implemented for the 1/4/16KB allocations and a sub-allocator for the smaller mapping db sizes should cluster the mapping nodes (for cache line utility) and get 4KB frames from the general allocator.
+
+Wake up queue:
+--------------
+
+A single ordered wake up queue could be used as a starting point but when large it might become a bottle neck.
+A 'Real' design is needed here... (optimization!)
+
+Present List: (Adam)
+-------------
+
+The present list is used for task delete, it is a doubly linked circular list with partial ordering. The partial ordering is that for any task if we start at lthread0 then to our right are all the threads of our task once the task id changes we are at the end of our tasks threads. This way starting at lthread0 we can find and kill all threads in our task in one sweep. To the left of the lthread0 we have all our child tasks until we hit a task depth that is equal to or less than our own. This way we can search for lthread0's of our child tasks by looking for task depths one less then ours and getting them to start task delete.
+
+The ordering is maintained by adding new threads to the right (via lthread_ex_regs) and adding new tasks (lthread0's via task_new) to the left. These are relative to the lthread0 of the task/chief.
+
+Mapping Database: (Adam/Espen)
+-----------------
+
+The mapping database design can support the mixed page sizes of the ARM. The way
+this is done is to start with a root frame table of 1MB sections (32KB). Each
+1MB node contains the following information in a dword:
+	Task:      Which task owns this mapping
+	Depth:     The depth of this mapping (0 in the frame table)
+	Address:   The virtual address of the 1MB mapping
+	Size_next: Whether next points to a single 1MB node or 64KB array node
+	Next:      A pointer to the next 1MB single node or 64KB array node
+	Perms:     Permission bits (for ARM we need grant bit, r/w bit, cache
+	           bit and buffer bit) The r/w, c and b bits can be obtained
+                   from the page table
+
+Once a 1MB section is split the Next pointer of the 1MB single node it was split
+from points to a 64KB array node. This is an array of 16 64KB single mapping
+nodes each containing the following information in a dword:
+	Task:      Which task owns this mapping
+	Depth:     The depth of the mapping
+	Address:   The virtual address of the 64KB mapping
+	Size_next: Whether next points to a single 64KB node or a 4KB array node
+	Next:      A pointer to the next 64KB single node or 4KB array node
+	Perms:     Same as above
+
+To support the future 1KB page sizes of the ARM the 4KB node is similar to the 
+1MB and 64KB ones. 16 4KB single mapping nodes make up a 4KB array node, each
+contains the following info in a dword:
+	Task:      Which task owns this mapping
+	Depth:     The depth of the mapping
+	Address:   The virtual address of the 4KB mapping
+	Size_next: Whether next points to a single 4KB node or a 1KB array node
+	Next:      A pointer to the next 4KB single node or 1KB array node
+	Perms:     Same as above
+
+Finally 4 1KB single nodes make up a 1KB array node. Each 1KB single node 
+contains the following info in a dword:
+	Task:    Which task owns this mapping
+	Depth:   The depth of the mapping
+	Address: The virtual address of the 1KB mapping
+	Next:    A pointer to the next 1KB single node
+        Perms:   Same as above
+
+NOTE: 1k pags are suppored only on newer ARM9 cores which we don't have access 
+to.
+
+This design allows page sizes to be split into sub size mappings. Of course if a mapping is split directly to a size smaller then the next one intermediate arrays must be used.
+
+The single pointer and the depth field allow the frame mapping tree to be stored logically in a linked list (even though its a tree to support the splitting of mapping sizes). This is similar to the Fiasco design but we use a linked list
+instead of a pointer which only costs an extra 3 bytes (8 vs fiasco's 5) but
+adds the bonus that we are then aligned with the caches and still fit 4 entries
+in one cache line.
+
+The mapping database should maintain its own 8/32/256 byte freelists and try to
+cluster nodes together so as to fit paths of the tree into single cache lines.
+
+Task Deletion Path: (Based on fiasco's design)
+-------------------
+
+This task delete design can be easily made preemptable:
+
+* Switch to lthread0 context of task to be deleted
+* Make lthread0 busy
+* Follow tcb->present_next links marking threads as busy until we hit a thread of a different task
+* Follow tcb->present_prev signalling lthread0's as busy until we hit a thread depth equal to or less then our own. Wait for them all to signal they are done.
+* Loop through page table, find mapping node for each valid page table entry and execute fpage_flush on it
+* Loop through page table, free all page table leaf (1KB frames)
+* Free page directory (16KB frame)
+* Loop through kernel page table freeing all tcb mappings for task (and relevant page table leafs
+* Signal to caller that we are done
+
+Thread Switch Path: (Adam/Uwe)
+-------------------
+
+Ideally this should include some form of Fast Address Space Switching later - for now its just the brain dead way of doing it (which linux uses)
+
+- Switch internal (to kernel) context
+  * Stack current thread context
+  * Switch Kernel stack to the new thread
+- Switch task context (if required)
+  * Change pagetable pointers
+  * Clean DCache
+  * Invalidate Caches
+  * Invalidate TLBs
+- Switch to new thread
+  * Top of stack contains address of unstacking procedure
+  * Unstack threads context
+  
+
+Map (Memory) Operation: (Espen)
+-----------------------
+
+To be done
+
+Grant (Memory) Operation: (Espen)
+-------------------------
+
+To be done
+
+Flush (Memory) Operation: (Espen)
+-------------------------
+
+To be done
+
+Data Abort Dispatching: (Adam)
+----------------
+The data abort dispatching path is used for user level paging and for paging 
+TCBs. The path is as follows:
+
+FAR = Fault Address Register
+FSR = Fault Status Register  
+SPSR = Save Program Status Register
+
+(See ARM ARM for more info)
+
+Data_Abort_Dispatch 
+{
+  if(SPSR & MODE_MASK) / Abort generated in a Kernel Mode
+    if((FAR >= TCB_START) && (FAR < TCB_LIMIT))
+      switch (FSR.Status) {
+        case TRANSLATION_SECTION: // Map Page Table Leaf, execute next case too
+          Add_Page_Table_Leaf(FAR);
+        case TRANSLATION_PAGE: // Map Null TCB frame
+          Map_Null_TCB(FAR);
+          break;
+        case PERMISSION_PAGE: // Map fresh TCB frame
+          Map_Fresh_TCB(FAR);
+          break;
+        default: // Kernel should not raise other abort status in TCB space
+          Kernel_Panic(GENERAL_DATA_ABORT);
+      }
+    else // Kernel should not raise data aborts anywhere else (until Long IPC)
+      Kernel_Panic(GERERAL_DATA_ABORT);
+  else // Abort generated in User Mode
+    switch (FSR.Status) {
+      case TRANSLATION_SECTION: // User Page Fault
+      case TRANSLATION_PAGE:
+      case PERMISSION_SECTION:
+      case PERMISSION_PAGE:
+        User_Page_Fault(FAR, FSR);
+        break;
+      default: // User Exception
+        User_Exception(FAR, FSR);
+    }
+}
+
+PROBLEM: How do we keep kernel mappings (ie TCBs since they are the only ones that change) consistent across task page tables. Page table leafs for TCBs should be shared, how to enforce this?
+
+Solution: Have all kernel mappings added to Sigma0's page table as well, then 
+          we check sigma0's page table before we add mappings page table leaves.
+          we then add the page table leaf to the sigma0 page table as well. This
+          way page table leaves of the kernel are shared across task page
+          tables.
+
+Prefetch Abort Path: (Adam)
+--------------------
+
+Prefetch Aborts should only signal user page faults otherwise kernel bug. The 
+path is as follows with the defines from above:
+
+- check if user or kernel aborted
+if(SPSR indicates user mode)
+  - check abort reason
+  if(if page table indicates Translation/Permission fault)
+    * Generate a pager ipc to threads pager_tid
+  else(page table indicates otherwise)
+    * Generate a exception ipc to threads excpt_tid
+else(SPSR indicates kernel mode)
+  * Kernel Panic (should never prefetch abort in the kernel)
+
+Preemption: (Adam/Uwe)
+----------------------
+
+	Kernel Code fits in general into two catagories. Preemptable sections
+and non-preemptable critical sections. Preemptable is fine, we unmask both IRQs
+and FIQs and the kernel can be interrupted at any time. For non-preemptable time
+bound operations (if the operations time is bound and fast the kernel is
+suitable for real time systems) we mask both IRQs and FIQs.
+	IRQ's are not a problem since on any exception they are masked out by
+the hardware. However between the exception and the code masking the FIQ we can
+have a FIQ since the user state may not be stacked we must either either stack
+the whole of the register set (the unbanked registers, the user bank and the
+interrupted exception bank) which is very expensive or come up with something
+else. Since FIQ's are supposed to be for very time critical interrupts this is
+not a good option.
+	On the SA-1100 the simple solution to direct all interrupts to IRQs
+then the FIQ is never an issue. However some ARM micro's like the 7110 (ARM7)
+hardwire some interrupts to IRQs and the rest to FIQs so we cannot solve the FIQ
+problem by ignoring it. What we can do is get the FIQ dispatcher/handler to work
+out what state it interrupted and if the kernel was interrupted in a before it
+stacked the user state we return to it and allow it to finish stacking until
+its in a preemptable state. The simple solution is as follows 
+
+	On entry to the kernel the F=0 (FIQ mask), I=1 (IRQ mask). The kernel
+then stacks the user state and then sets the F/I bits to either 0 (preemptable)
+or 1 (non-preemtable) once the F/I bits are set the kernel code is in safe
+state.
+
+	The FIQ dispatcher on entry (FIQ exceptions mask both IRQs/FIQs) checks
+the SPSR for the mode of the cpu. If user mode was preempted we just go about
+handling the FIQ. If kernel mode was preempted we have to check the F/I bits:
+
+	F=0,I=0: Kernel is in a safe preemtable state so go about handling FIQ
+	F=0,I=1: Kernel is stacking user state so we switch back to it masking
+the FIQ in the process so F=1,I=1 and no FIQ can preempt the kernel until it 
+unmasks interrupts at which time the FIQ handler will be invoked again (since
+the interrupt was not cleared)
+	F=1,I=0: N/A 
+        F=1,I=1: N/A since by definition the FIQ handler can not be entered
+
+	So all we really have to do is check the I bit. This solution has a nice
+bound overhead since the worst case is a single FIQ being generated in the 
+'unsafe' state and we return straight away until we are ready to be preeptable. In most cases the cost of setting the CPSR (To update the F/I bits) is required
+anyway to change to the abort mode of the cpu (for our ignore ARMs exsesive 
+banked modes mentality) it also adds minimal overhead in the FIQ path to keep
+FIQ's in the user state and preemptable kernel state fast.
+	In the case of the SA-1100 where we can route interrupts to either FIQs
+or IRQs it is still a little up in the air what to do. Routing all to IRQs means
+the kernel can not be preempted in the unsafe state so it saves us the cost of
+trapping the FIQ returning and then trapping again later. Routing all to FIQs
+means the interrupt handler code has more banked registers to play with. 
+Spliting the routing allows us to do something like route all user interrupts to
+the one handler and kernel interrupts to the other. This would allowing simpler
+handlers and allow the more register intensive one to have the banked registers
+while the less register intensive one avoids the overhead of the double trap.
+
+ARM Register Banking:
+---------------------
+
+The ARM architecture provides 6 sets of banked registers. The normal user set,
+as well as the abort, IRQ, FIQ, supervisor and undefined sets. The lr is set by
+exception entry to the pc at the time of the exception so its not interesting
+however the sp (stack pointer) is also banked and is of interest to use. The
+idea of this is that each exception has its own stack so we don't need to load
+or store it between exceptions. However L4 uses a kernel stack per thread and no
+matter what exception arrises we want to stack the interrupted state on the 
+interrupted threads stack so the banked sp is more a hinderance then a help.
+	Three solutions exsit to this problem. One is to ignore the banked
+registers and use only the abort mode. This can be done by uses prefetch aborts
+to generate syscalls in the abort mode. Prefetch/Data aborts execute in the 
+abort mode already so the cases requiring speed all can enter the kernel with
+the current threads kernel stack already set up in the abort_sp. SWI and 
+undefined instruction exceptions are not so time critical so they can switch to
+the abort mode, IRQs and FIQs however do take a penalty and we lose most of the
+benifits of the extra 5 banked registers in the FIQ mode.
+	The second solution is to use a non-banked register as the kernel stack.This costs the setup time of loading the current threads kernel stack pointer
+whenever we first enter the kernel from the user mode but has the advantage that
+the kernel stack is accessable from any mode so preemption in the kernel is fast
+and the IRQs/FIQs get a worthwhile benifit. We also free up a banked register
+which we can store data in that will remain unchanged during exceptions that 
+put the kernel into a different cpu mode. An added cost the unbanked kernel 
+stack pointer registers must moved to a temp register if an exception (other 	then a syscall) is raised in the user mode. This solution is nice for an ASM 	implimentation but has problems with standard C/gcc, however certain registers 	could be assigned invariant values so while we are in the kernel they have fixed
+allocations. This might be a nice property but it requires gcc hacking to avoid
+stacking and to associate the registers with variables (this may just require 
+some ASM glue in the C functions)
+	The last solution is to use the sp of the current mode and load it
+before switching to the user mode. This however requires switching to the mode
+we want it to be in (swi is the most profitable probably to keep syscalls fast)
+and we have to manually load it at the start of any other exception. A real 
+complication arrises when exceptions are generated in the kernel. We then have
+to switch modes to access the interrupted modes sp and this leads to the same 
+overheads at the first solution so its probably the least attractive option
+since it only saves us moving the unbanked register that would be the kernel
+stack pointer for exceptions user mode exceptions. The costs would outway the
+benifit.

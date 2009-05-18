@@ -1,0 +1,45 @@
+######################################################################
+##                
+## Copyright (C) 1999, 2000, 2001, 2002,  Karlsruhe University
+##                
+## File path:     xconfig/trace.in
+## Description:   Various trace configurations.
+##                
+## @LICENSE@
+##                
+## $Id: trace.in,v 1.9 2002/05/07 19:20:04 skoglund Exp $
+##                
+######################################################################
+
+mainmenu_option next_comment
+comment 'Trace Settings'
+
+if [ "$CONFIG_DEBUGGER_NEW_KDB" != "y" ]; then
+  bool 'Trace kernel page faults' CONFIG_DEBUG_TRACE_KPF n
+  bool 'Trace user page faults' CONFIG_DEBUG_TRACE_UPF n
+  bool 'Trace interrupts' CONFIG_DEBUG_TRACE_IRQS n
+  bool 'Trace IPCs' CONFIG_DEBUG_TRACE_IPC n
+  bool 'Trace Syscalls' CONFIG_DEBUG_TRACE_SYSCALLS n
+  bool 'Trace Mapping Database' CONFIG_DEBUG_TRACE_MDB n
+  bool 'Trace SMP' CONFIG_DEBUG_TRACE_SMP n
+  bool 'Trace Inter-processor Communication' CONFIG_DEBUG_TRACE_IPI n
+  bool 'Trace Misc' CONFIG_DEBUG_TRACE_MISC n
+  bool 'Verbose startup' CONFIG_DEBUG_TRACE_INIT n
+  bool 'Visual spin' CONFIG_DEBUG_SPIN n
+  
+  if [ "$CONFIG_ARCH_X86" = "y" ]; then
+    bool 'Enable tracebuffer' CONFIG_TRACEBUFFER n
+  fi
+
+  bool 'Enable tracepoints' CONFIG_ENABLE_TRACEPOINTS n
+  bool 'Enable thread switch trace' CONFIG_ENABLE_SWITCH_TRACE n
+  if [ "$CONFIG_ENABLE_SWITCH_TRACE" = "y" ]; then
+    int '  Thread switch trace size' CONFIG_SWITCH_TRACE_SIZE 128
+  fi
+fi
+
+if [ "$CONFIG_ARCH_X86" = "y" ]; then
+  bool 'Measure interrupt latency' CONFIG_MEASURE_INT_LATENCY n
+fi
+
+endmenu

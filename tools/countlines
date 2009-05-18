@@ -1,0 +1,44 @@
+#!/usr/bin/perl
+######################################################################
+##                
+## Copyright (C) 2000,  University of Karlsruhe
+##                
+## Filename:      countlines
+## Description:   Count number of lines in C files, not including
+##                comments and blank line.
+## Author:        Espen Skoglund <esk@ira.uka.de>
+##                
+## $Id: countlines,v 1.1 2000/01/26 15:37:51 skoglund Exp $
+##                
+######################################################################
+
+
+my @files = @ARGV;
+
+## Slurp whole files
+undef $/;
+
+foreach $file ( @files ) {
+  
+  open( SRCFILE, $file ) || die "open($file): $!\n";
+  my $fc = <SRCFILE>;
+  close SRCFILE;
+
+  ## Remove comments.
+  $fc =~ s!/\*.*?\*/!!gs;
+  $fc =~ s!//.*$!!mg;
+
+  ## Remove blank lines
+  $fc =~ s/^\s*\n//mg;
+
+  my $num = $fc =~ s/\n/\n/g;
+  printf("%-40s %5d\n", $file.":", $num);
+
+  $tot += $num;
+}
+
+print "-"x(40+6), "\n";
+printf("%-40s %5d\n", "Total:", $tot);
+
+
+

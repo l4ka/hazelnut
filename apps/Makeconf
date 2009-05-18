@@ -1,0 +1,200 @@
+# -*- mode: Makefile; -*-
+######################################################################
+##                
+## Copyright (C) 2001,  Karlsruhe University
+##                
+## File path:     Makeconf
+## Description:   Application directory make configuration
+##                
+## @LICENSE@
+##                
+## $Id: Makeconf,v 1.22 2002/01/24 07:16:26 uhlig Exp $
+##                
+######################################################################
+
+######################################################################
+# the root directory
+# this rule assumes the topdir to be <somepath>/l4-ka/
+# with apps as one of its subdirectories
+
+TOPDIR = $(dir $(word 1,$(wildcard Makeconf $(addsuffix /Makeconf, .. ../.. ../../..))))/..
+LIB=
+
+# this checks for the Makeconf.local
+# we need it, so if it's not there, just rebuild it
+ifneq ($(wildcard $(TOPDIR)/apps/Makeconf.local), )
+
+######################################################################
+# this should be the very first rule
+
+_default: all
+
+
+######################################################################
+# local Makeconf file
+
+-include $(TOPDIR)/apps/Makeconf.local
+
+
+######################################################################
+# Platform specific parts
+
+ifeq ($(PLATFORM), dnard)
+CPPFLAGS	+= -mcpu=strongarm110
+ARCH		= arm
+else
+
+ifeq ($(PLATFORM), ep7211)
+CPPFLAGS	+=
+DEFINES		+= EXCEPTION_VECTOR_RELOCATED
+ARCH		= arm
+else
+
+ifeq ($(PLATFORM), brutus)
+CPPFLAGS	+= -mcpu=strongarm1100
+DEFINES		+= EXCEPTION_VECTOR_RELOCATED
+ARCH		= arm
+else
+
+ifeq ($(PLATFORM), pleb)
+CPPFLAGS	+= -mcpu=strongarm1100
+DEFINES		+= EXCEPTION_VECTOR_RELOCATED
+ARCH		= arm
+else
+
+ifeq ($(PLATFORM), ipaq)
+CPPFLAGS	+= -mcpu=strongarm1100
+DEFINES		+= EXCEPTION_VECTOR_RELOCATED
+ARCH		= arm
+else
+
+ifeq ($(PLATFORM), i586)
+ARCH		= x86
+CPPFLAGS	= -D__L4_VERSION_X__
+CFLAGS		+= -Wall -Wno-format -O9 -fomit-frame-pointer -freg-struct-return
+else
+
+ifeq ($(PLATFORM), r4000)
+ARCH		= mips
+CFLAGS		+= -Wall -Wno-format -O9 -fomit-frame-pointer -mcpu=r4000 -G 0 -mno-abicalls -fno-pic -mips3 -mgp32
+#CFLAGS		+= -Wall -Wno-format -O9 -mcpu=r4000 -G 0 -mno-abicalls -fno-pic -mips3 -mgp32
+SFLAGS		+= -mips3
+
+else
+$(error fatal error: unknown platform "$(PLATFORM)". Change Makeconf.local)
+endif
+endif
+endif
+endif
+endif
+endif
+endif
+
+else
+PLATFORM=i586	# make make happy
+_default:
+	@$(MAKE) xconfig
+	@$(MAKE)
+	@exit 0
+endif
+
+######################################################################
+# Architecture specific parts
+
+SHELL		= bash
+ifeq ($(ARCH), arm)
+  ifneq ($(shell type -p arm-unknown-linux-gcc),)
+PREFIX		 = arm-unknown-linux-gnu-
+  else
+    ifneq ($(shell type -p arm-elf-gcc),)
+PREFIX		 = arm-elf-
+    else
+PREFIX		 = arm-linux-
+    endif
+  endif
+CFLAGS		+= -Wall -O2 -fomit-frame-pointer
+endif
+
+ifeq ($(ARCH), mips)
+PREFIX		= mips-
+endif
+
+ifeq ($(ARCH), x86)
+  ifeq ($(MACHTYPE),i686-pc-cygwin)
+PREFIX=i686-linux-
+  endif	
+endif
+
+######################################################################
+# tools
+
+RM		 = rm
+LN_S		 = ln -s
+CC		 = $(PREFIX)gcc
+LD		 = $(PREFIX)ld
+OBJCOPY		 = $(PREFIX)objcopy
+STRIP		 = $(PREFIX)strip
+AR		 = $(PREFIX)ar
+
+INCLUDES	+= $(TOPDIR)/apps/include
+
+LIBGCC		 = $(dir $(shell $(CC) --print-lib))
+
+SFLAGS		+= -DASSEMBLY
+LDFLAGS 	+= -L$(LIBGCC)
+
+DEFINES		+= __ARCH__=$(ARCH)\
+		   __PLATFORM__=$(PLATFORM)
+
+CPPFLAGS 	+= -nostdinc $(addprefix -I, $(INCLUDES)) $(addprefix -D, $(DEFINES))
+
+CFLAGS		+= -funsigned-char -funsigned-bitfields
+
+######################################################################
+# some evil magic
+
+ifeq ($(findstring -fomit-frame-pointer, $(CFLAGS)), -fomit-frame-pointer)
+DEFINES	+= NO_FRAME_POINTER
+endif	
+
+
+
+######################################################################
+# compile rules
+
+%.o:    %.S
+	$(CC) $(CPPFLAGS) $(SFLAGS) -o $@ -c $<
+
+%.o:	%.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ -c $<
+
+
+######################################################################
+# library rules
+LIB_OBJ	= $(patsubst %.S, %.o, $(patsubst %.c, %.o, $(LIB_SRC)))
+
+$(LIB): $(LIB_OBJ)
+	$(AR) -rcs $(LIB) $(LIB_OBJ)
+
+
+######################################################################
+# striptease
+
+%.stripped:	%
+	cp $^ $@
+	$(STRIP) $@
+	@chmod a+r-x $^ $@
+
+######################################################################
+# dependencies
+
+.depend:	$(SRCS)
+	@echo Building dependencies in `pwd`
+	@$(CC) $(CPPFLAGS) -o - -M $(SRCS) > $@
+
+
+######################################################################
+# cleanup
+
+celan clean::	
+	$(RM) -f *~ *.s *.o *.i *.ii *.s $(LIB)

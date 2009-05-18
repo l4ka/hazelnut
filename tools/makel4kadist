@@ -1,0 +1,25 @@
+#!/bin/sh
+
+BUILDDIR=`pwd`/l4kadist
+if [ ! -x $BUILDDIR ] ; then mkdir $BUILDDIR; fi
+cd $BUILDDIR || exit 1
+
+rm -rf l4-ka
+cvs -d i30pc20.ira.uka.de:/home/cvs export -kv -r RC2 -D now l4-ka
+
+cd l4-ka || exit 1
+rm -rf apps/{testing,topp,membus,serv,helpers}
+rm -rf apps/lib/ide
+rm -rf `find kernel -name "*smp*"` kernel/include/x86/mps-14.h
+rm -rf `find kernel -name "*mips*"` `find kernel -name "*sgi*"`
+rm -rf kernel/kdb/{new-kdb.c,tracing.c,interrupts.c}
+rm -rf doc
+rm -rf kernel/README.html
+
+#tools/stripcpp -UCONFIG_DEBUGGER_NEW_KDB `find kernel -type f | xargs grep -l CONFIG_DEBUGGER_NEW_KDB | grep -v xconfig`
+#tools/stripcpp -UCONFIG_SMP `find kernel -type f | xargs grep -l CONFIG_SMP | grep -v xconfig`
+#tools/stripcpp -UCONFIG_IPC_FASTPATH `find kernel -type f | xargs grep -l CONFIG_IPC_FASTPATH | grep -v xconfig`
+
+tools/addlicense -l tools/gpl.license `find apps kernel -type f`
+
+rm -rf tools

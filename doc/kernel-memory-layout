@@ -1,0 +1,7 @@
+0x0000.0000	exception vector page
+
+
+0xE000.0000	TCB array
+0xF000.0000	RAM - mapped as a contiguous area - XXX: is this ok?
+0xF800.0000	page directory array
+0xF900.0000	kernel code/data/misc

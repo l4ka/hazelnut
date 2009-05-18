@@ -1,0 +1,1345 @@
+include l4pre.inc 
+
+
+  Copyright GMD, L4.PAGMAP.5, 24,03,97,210
+ 
+ 
+;*********************************************************************
+;******                                                         ******
+;******         Page Mapper                                     ******
+;******                                                         ******
+;******                                   Author:   J.Liedtke   ******
+;******                                                         ******
+;******                                   created:  24.02.90    ******
+;******                                   modified: 17.07.96    ******
+;******                                                         ******
+;*********************************************************************
+ 
+
+  public init_pagmap
+  public map_ur_page_initially
+  public map_or_grant_fpage
+  public flush_address_space
+  public remove_from_sigma0_and_pmap
+
+
+  extrn request_fresh_frame:near
+  extrn map_fresh_ptab:near
+  extrn initial_grab_mem:near
+  extrn map_page_initially:near
+  extrn map_system_shared_page:near
+  extrn define_idt_gate:near
+  extrn phys_frames:dword
+ 
+
+
+.nolist 
+include l4const.inc
+include adrspace.inc
+include intrifc.inc
+include uid.inc
+include tcb.inc
+include cpucb.inc
+include schedcb.inc
+include syscalls.inc
+.list
+include pagconst.inc
+include pagmac.inc
+include pagcb.inc
+.nolist
+include msg.inc
+.list
+
+
+
+
+
+ok_for pentium,k6
+
+
+
+
+include pnodes.inc
+ 
+
+
+  assume ds:codseg
+
+
+
+
+
+;****************************************************************************
+;*****                                                                  *****
+;*****                                                                  *****
+;*****        PAGMAP      INITITIALIZATION                              *****
+;*****                                                                  *****
+;*****                                                                  *****
+;****************************************************************************
+
+
+  icode
+
+
+
+;----------------------------------------------------------------------------
+;
+;       init pagmap
+;
+;----------------------------------------------------------------------------
+; PRECONDITION:
+;
+;       paging enabled
+;
+;----------------------------------------------------------------------------
+
+
+
+init_pagmap:
+
+
+  mov   edi,offset shadow_pdir
+  mov   ecx,sizeof shadow_pdir/4
+  sub   eax,eax
+  cld
+  rep   stosd
+
+  mov   ecx,[phys_frames+PM]
+  lea   eax,[ecx*linksize]
+  call  initial_grab_mem
+  add   eax,PM
+  mov   ds:[linktab_base],eax
+  push  eax
+  sub   eax,(PM SHR log2_pagesize)*linksize
+  mov   ds:[linktab_base_PM],eax
+  pop   eax
+  
+  push  ecx
+  DO
+        mov   dword ptr [eax],0
+        add   eax,4
+        dec   ecx
+        REPEATNZ
+  OD
+  pop   ecx      
+        
+
+
+  imul  ecx,pnodes_per_frame
+  lea   eax,[ecx*sizeof pnode]
+  call  initial_grab_mem
+  add   eax,PM
+  mov   ds:[free_pnode_root],eax
+  
+  DO
+        mov   [eax].pte_ptr,0
+        add   eax,sizeof pnode
+        mov   [eax-sizeof pnode].succ_pnode,eax
+        dec   ecx
+        REPEATNZ
+  OD
+  mov   [eax-sizeof pnode].succ_pnode,-1      
+
+ 
+  mov   bh,3 SHL 5
+
+  mov   bl,fpage_unmap
+  mov   eax,offset unmap_fpage_sc+PM
+  call  define_idt_gate
+
+  ret
+
+
+
+
+  icod  ends
+
+
+
+
+
+
+
+
+
+
+;****************************************************************************
+;*****                                                                  *****
+;*****                                                                  *****
+;*****        flexpage handling                                         *****
+;*****                                                                  *****
+;*****                                                                  *****
+;****************************************************************************
+
+
+
+do_source_dest_data struc
+
+  source_pdir         dd 0
+  map_mask            dd 0
+  operation           dd 0
+  source_addr         dd 0
+
+  dest_task           dd 0
+  dest_addr           dd 0
+
+do_source_dest_data ends
+
+
+do_source_data struc
+
+                      dd 0      ; source_pdir
+                      dd 0      ; map_mask
+                      dd 0      ; operation
+                      dd 0      ; source_addr
+
+  tlb_flush_indicator dd 0      ; 0: no tlb flush required, 2: required
+
+do_source_data ends
+
+
+                
+
+
+
+
+
+
+;----------------------------------------------------------------------------
+;
+;       unmap fpage
+;
+;----------------------------------------------------------------------------
+; PRECONDITION:
+;
+;       EAX   fpage
+;       ECX   map mask
+;
+;----------------------------------------------------------------------------
+; POSTCONDITION:
+;
+;       EAX,EBX,ECX,EDX,ESI,EDI,EBP scratch
+;
+;----------------------------------------------------------------------------
+
+
+unmap_fpage_sc:
+
+  tpre  trap2,ds,es
+
+  mov   ch,cl
+  mov   cl,al
+  shr   cl,2
+  shr   eax,cl
+  shl   eax,cl
+  sub   cl,log2_pagesize
+  IFNC
+
+        push  offset unmap_fpage_ret+PM
+
+        sub   esp,sizeof do_source_dest_data-sizeof do_source_data
+
+        sub   edx,edx
+        push  edx
+        push  eax
+
+        test  ecx,ecx
+        IFNS
+              test  ch,page_write_permit
+              IFNZ
+                    push  offset unmap_page+PM
+                    jmp   do_fpage
+              FI
+              push  offset unmap_write_page+PM
+              jmp   do_fpage
+        FI
+
+              test  ch,page_write_permit
+              IFNZ
+                    push  offset flush_page+PM
+                    jmp   do_fpage
+              FI
+              push  offset flush_write_page+PM
+              jmp   do_fpage
+
+
+      unmap_fpage_ret:
+
+        IFNC
+              mov   eax,cr3
+              mov   cr3,eax
+        FI
+  FI          
+
+  tpost eax,ds,es
+
+
+;----------------------------------------------------------------------------
+;
+;       map or grant fpage
+;
+;----------------------------------------------------------------------------
+; PRECONDITION:
+;
+;       EDX   centerpoint
+;       EBX   source fpage addr + operation
+;       EBP   dest tcb addr (determines dest address space only)
+;       EDI   dest fpage addr
+;
+;----------------------------------------------------------------------------
+; POSTCONDITION:
+;
+;       EAX,EBX,ECX,EDX,ESI,EDI,EBP scratch
+;
+;----------------------------------------------------------------------------
+
+
+
+map_or_grant_fpage:
+        
+  mov   ch,bl                        ; CH: opn     
+  mov   eax,ebx
+  
+  mov   ebx,edi
+  mov   esi,-1 SHL log2_pagesize
+  
+  shr   al,2
+  mov   cl,bl
+  
+  shr   cl,2
+  mov   edi,esi
+  
+  sub   al,log2_pagesize
+  IFNC  
+  
+  sub   cl,log2_pagesize
+  CANDNC 
+      
+        shl   edi,cl
+        mov   cl,al
+      
+        shl   esi,cl
+        
+        and   eax,esi
+        xor   esi,edi
+      
+        test  esi,edi
+        xc    nz,shrink_snd_fpage          ; snd fpage > rcv fpage
+      
+        and   edx,esi
+        and   edi,ebx
+      
+        add   edi,edx
+        mov   ebx,esp
+       
+        test  ecx,(fpage_grant SHL 8)+0FFh
+        xc    z,map_one_page
+        
+        push  edi
+             
+        mov   edx,ebp
+        push  ebp
+      
+        push  eax
+        push  offset map_page+PM
+        
+        test  ch,fpage_grant
+        jz    do_fpage
+        
+        
+        mov   ch,0FFh                 ; map mask: all
+        mov   ebp,cr3                 ; granting requires TLB flush on Pentium,
+        mov   cr3,ebp                 ; because following addr space switch might
+                                      ; be executed *without* TLB flush
+        mov   [esp],offset grant_page_+PM
+        jmp   do_fpage
+
+  FI
+
+  ret
+
+
+
+
+
+   
+
+
+XHEAD shrink_snd_fpage
+
+  and   edx,esi
+  add   eax,edx
+  sub   edx,edx
+  mov   cl,bl
+  xret
+
+
+
+XHEAD map_one_page 
+
+  
+  
+  and   ebx,-sizeof tcb
+  mov   esi,edi
+
+  shr   esi,22
+  mov   edx,[ebp+task_pdir]
+  
+  
+  cmp   edi,virtual_space_size
+  IFB_
+  
+        mov   edx,dword ptr ds:[esi*4+edx+PM]
+        mov   esi,eax
+  
+        shr   esi,22
+        mov   ebx,[ebx+task_pdir]      
+                
+        test  dl,superpage+page_present
+        xret  pe
+  
+        mov   ebx,dword ptr ds:[esi*4+ebx+PM]
+        and   edx,-pagesize
+  
+        test  bl,superpage+page_present
+        xret  pe
+  
+        shr   edi,12
+        and   eax,3FF000h
+  
+        shr   eax,12
+        and   ebx,-pagesize
+  
+        and   edi,3FFh
+        cmp   esi,virtual_space_size SHR 22
+  
+        lea   esi,[eax*4+ebx+PM]
+  CANDB
+  
+        or    ch,NOT page_write_permit
+        lea   edi,[edi*4+edx+PM]
+  
+        mov   eax,[esi]
+        
+        test  eax,eax
+        jnz   map_page
+        
+  FI      
+  ret
+        
+
+
+;----------------------------------------------------------------------------
+;
+;       do fpage operation
+;
+;----------------------------------------------------------------------------
+; PRECONDITION:
+;
+;       EAX   source fpage addr
+;        CL   log2 (fpage size / pagesize)
+;        CH   map mask
+;       EDX   0 / dest tcb addr (determines dest address space only)
+;       EDI   - / dest fpage addr
+;
+;
+;       interrupts disabled
+;
+;----------------------------------------------------------------------------
+; POSTCONDITION:
+;
+;       EAX,EBX,ECX,EDX,ESI,EDI,EBP scratch
+;
+;       map/grant:
+;
+;             NC:   all mapping/granting was successful
+;             C:    aborted due to requested ptab unavailable
+;
+;
+;       flush/unmap:
+;
+;             NC:   at least one page unmapped, TLB flush required
+;             C:    no page of current AS unmapped, no TLB flush needed
+;
+;----------------------------------------------------------------------------
+
+
+
+
+
+
+do_fpage:
+
+  mov   ebp,esp
+  and   ebp,-sizeof tcb
+  mov   ebp,[ebp+task_pdir]
+  
+  
+do_fpage_in_address_space:
+
+  mov   ebx,1
+  shl   ebx,cl
+
+  or    ch,NOT page_write_permit
+  and   ebp,-pagesize
+
+  push  ecx
+  add   ebp,PM
+
+  inc   ds:[do_fpage_counter]
+  push  ebp
+
+
+  DO
+
+        cmp   eax,virtual_space_size
+        jae   do_fpage_ret
+
+        mov   ebp,esp
+
+        push  eax
+        push  edi
+
+        mov   esi,eax
+        and   eax,0FFC00000h
+        mov   edx,[ebp+source_pdir]
+        shr   eax,22-2
+        and   esi,003FF000h
+        mov   ecx,eax
+        add   edx,eax
+        shr   esi,log2_pagesize-2
+        add   esi,PM
+
+        mov   eax,[edx]
+
+
+        test  al,superpage
+        IFNZ
+              cmp   ebx,MB4/pagesize
+              IF____xc ae,do_M4_operation,long
+              ELSE__
+                    test  ah,shadow_ptab SHR 8
+                    mov   eax,[ecx+shadow_pdir]
+                    xc    z,lock_shadow_ptab,long
+              FI____
+        FI             
+
+        test  al,superpage+page_present
+        IFPO  ,,long                       ; note: NOT present => NOT M4 rpage
+              and   eax,-pagesize
+              add   esi,eax
+
+              mov   edx,[ebp+dest_task]
+              IFA   edx,2
+
+                    cmp   edi,virtual_space_size
+                    jae   do_fpage_ret
+
+                    mov   ecx,[edx+task_pdir]
+                    mov   eax,edi
+                    shr   eax,22
+                    and   edi,003FF000h
+                    lea   ecx,[eax*4+ecx+PM]
+
+                    shr   edi,log2_pagesize-2
+                    add   edi,PM
+
+                    mov   eax,[ecx]
+                    test  al,superpage+page_present
+                    xc    pe,do_fpage_map_fresh_ptab,long
+                    and   eax,-pagesize
+                    add   edi,eax
+              FI
+
+              mov   ecx,[ebp+map_mask]
+              DO
+                    mov   eax,[esi]
+                    test  eax,eax
+                    IFNZ
+                          push  ebx
+                          call  [ebp+operation]
+                          pop   ebx
+                    FI
+                    
+                    dec   ebx
+                    jz    short do_fpage_ret
+                    
+                    add   esi,4
+                    add   edi,4
+                    
+                    test  ebx,pagesize/4-1
+                    REPEATNZ
+              OD
+
+              add   ebx,MB4/pagesize
+              
+              mov   eax,ds:[do_fpage_counter]
+              sti
+              nop
+              nop
+              cli
+              cmp   eax,ds:[do_fpage_counter]
+              jnz   short intr_in_do_fpage
+        FI
+
+        pop   edi
+        pop   eax
+
+        add   edi,MB4
+        add   eax,MB4
+        sub   ebx,MB4/pagesize
+        REPEATA
+
+  OD
+
+
+
+do_fpage_ret:
+
+  cmp   [ebp+tlb_flush_indicator],1
+
+  lea   esp,[ebp+sizeof do_source_dest_data]
+  ret
+
+
+
+
+
+
+
+
+XHEAD do_fpage_map_fresh_ptab
+
+  jnz   do_fpage_ret
+
+  call  map_fresh_ptab
+  xret  nc,long
+  jmp   do_fpage_ret
+
+
+
+
+
+
+
+intr_in_do_fpage:
+
+  pop   edi
+  pop   eax
+
+  mov   eax,[ebp+source_addr]
+  add   eax,esi
+  mov   [ebp+source_addr],eax
+
+  mov   edx,[ebp+dest_task]
+
+  mov   edi,[ebp+dest_addr]
+  add   edi,esi
+  mov   [ebp+dest_addr],edi
+
+  mov   ebp,[ebp+source_pdir]
+
+  jmp   do_fpage
+
+
+
+
+
+
+
+
+
+
+
+
+XHEAD do_M4_operation
+
+
+  mov   esi,edx
+  mov   edx,[ebp+dest_task]
+  IFA   edx,2
+
+        cmp   edi,virtual_space_size
+        jae   do_fpage_ret
+
+        mov   edx,[edx+task_pdir]
+        shr   edi,22
+        lea   edi,[edi*4+edx+PM]
+  FI
+
+  push  ebx
+  
+  test  ah,shadow_ptab SHR 8
+  IFNZ
+        pushad
+        
+        and   byte ptr [esi+1],NOT (shadow_ptab SHR 8)
+        mov   esi,[ecx+shadow_pdir]
+        and   esi,pagesize-1
+        mov   ecx,esi
+        shr   ecx,log2_pagesize
+        mov   eax,ds:[linktab_base] 
+        mov   ds:[ecx*linksize+eax].pdir_link,0
+        DO
+              mov   eax,dword ptr [esi+PM]
+              test  eax,eax
+              IFNZ
+                    call  unmap_page
+              FI
+              add   esi,4
+              test  esi,pagesize-1
+              REPEATNZ
+        OD                    
+        popad
+  FI
+          
+  call  [ebp+operation]
+  
+  sub   eax,eax
+
+  pop   ebx
+  xret  ,long
+
+
+
+
+
+
+
+XHEAD lock_shadow_ptab
+
+        
+  push  ebx
+  push  edi
+  
+  mov   edi,ds:[linktab_base]
+  
+  mov   ebx,eax      
+  shr   ebx,log2_pagesize
+  IFNZ
+  CANDZ [ebx*linksize+edi].pdir_link,0
+  
+        IFZ   [ebp+operation],<offset grant_page_>
+              push  ecx
+         ;;     shl   ecx,log2_size_pnode-2
+         ;;     cmp   [ecx+M4_pnode_base].pte_ptr,edx
+              pop   ecx
+        CANDZ                                  ; transfer to K4 pages if
+              sub   eax,eax                    ; ur pages granted
+              xchg  eax,[ecx+shadow_pdir]      ; (typically sigma 0 to kernel)
+              mov   [edx],eax
+        
+        ELSE_
+              or    byte ptr [edx+1],shadow_ptab SHR 8
+              mov   [ebx*linksize+edi].pdir_link,edx
+        FI      
+
+  ELSE_
+        sub   eax,eax
+  FI
+  
+  pop   edi
+  pop   ebx                              
+  xret  ,long                   
+             
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+;----------------------------------------------------------------------------
+;
+;       map / grant page
+;
+;----------------------------------------------------------------------------
+; PRECONDITION:
+;
+;       CH    map mask
+;       ESI   pointer to first source PTE (present!)
+;       EDI   pointer to first dest PTE
+;
+;       dest PTE empty
+;
+;----------------------------------------------------------------------------
+; POSTCONDITION:
+;
+;       EAX,EBX   scratch
+;
+;       dest frame addr     = old source frame addr
+;       dest access rights  = old source access rights AND [ebp+map_mask]
+;
+;       source PTE empty
+;
+;----------------------------------------------------------------------------
+
+
+
+grant_page_:
+
+
+  mov   byte ptr [esi],0
+  pushad
+  call  unmap_page
+  popad
+  
+  
+  
+  
+  
+  
+map_page:
+
+  and   al,ch
+  mov   ecx,[edi]
+    
+  mov   edx,ds:[linktab_base_PM]                                                 
+  mov   [edi],eax  
+
+  test  ecx,ecx
+  xc    nz,flush_dest_pte
+  
+  mov   eax,esi
+  mov   ecx,esi
+  
+  shr   eax,log2_pagesize
+  
+  mov   eax,[eax*linksize+edx]
+  xor   ecx,512
+  
+  test  eax,eax
+  xc    z,gen_new_maptab,long
+  
+  mov   edx,[eax+ecx]
+  add   eax,ecx
+  
+  test  edx,edx
+  IFZ
+        mov   [eax],edi
+        ret
+  FI
+  
+  
+  mov   ecx,ds:[free_pnode_root]
+  test  edx,1
+  IFZ
+        mov   [ecx].pte_ptr,edx
+        mov   edx,ecx
+        
+        mov   ecx,[ecx].succ_pnode
+  FI  
+
+  and   edx,NOT 1  
+  inc   ecx
+  
+  mov   [eax],ecx
+  jz    short free_pnode_unavailable
+  
+  mov   eax,[ecx-1].succ_pnode
+  mov   [ecx-1].pte_ptr,edi
+  
+  mov   ds:[free_pnode_root],eax
+  mov   [ecx-1].succ_pnode,edx
+  
+  ret
+  
+  
+
+
+
+free_pnode_unavailable:
+
+  ke    '-free_pnode_unav'
+
+  
+  
+  
+XHEAD flush_dest_pte
+
+  and   al,page_present+page_write_permit
+  not   cl
+  and   al,cl
+  IFNZ
+  
+  xor   eax,ecx
+  and   eax,-pagesize
+  CANDZ
+  
+  mov   eax,esi
+  shr   eax,log2_pagesize
+  mov   eax,[eax*linksize+edx]
+  test  eax,eax
+  CANDNZ
+  
+        mov   eax,[eax+esi]
+        cmp   eax,edi
+        jz    trivial_remap
+        
+        dec   eax
+        test  eax,1
+        IFZ
+              DO
+                    cmp   [eax].pte_ptr,edi
+                    jz    trivial_remap
+                    mov   eax,[eax].succ_pnode
+                    test  eax,eax
+                    REPEATNZ
+              OD
+        FI
+  FI
+  
+  IFNZ  cl,NOT 0
+        pushad
+        mov   esi,edi
+        call  unmap_page
+        popad
+  FI
+  
+  shr   ecx,log2_pagesize
+  push  edx
+  push  esi
+  push  ebp
+  
+  mov   esi,[ecx*linksize+edx].ptab_link
+  mov   ebp,esp
+  call  clear_
+  ke    'grrr'
+  
+cleared:
+  mov   [eax],edx
+  
+  mov   esp,ebp
+  pop   edx
+  pop   ebp
+  pop   esi
+  xret  ,long
+  
+
+
+trivial_remap:
+
+  ret
+  
+  
+  
+  
+clear_:
+  mov   eax,esi
+  sub   edx,edx
+  
+  shr   eax,log2_pagesize
+  mov   eax,[eax*linksize+edx]
+  test  eax,eax
+  IFNZ
+  
+  mov   ecx,[eax+esi]
+  add   eax,esi
+    
+  test  ecx,ecx
+  CANDNZ
+                                       
+        cmp   esi,edi
+        jz    cleared
+        
+        mov   esi,ecx        
+        test  ecx,1
+        jz    clear_
+        
+        mov   esi,[ecx-1].pte_ptr
+        mov   edx,[ecx-1].succ_pnode
+        
+        cmp   esi,edi
+        jz    clear_head_pnode
+        
+        DO
+              push  ecx
+              push  edx
+              call  clear_
+              pop   ecx
+              pop   eax
+  
+              test  ecx,ecx
+              EXITZ
+              
+              mov   esi,[ecx].pte_ptr
+              mov   edx,[ecx].succ_pnode
+              
+              cmp   esi,edi
+              REPEATNZ
+          
+              IF    offset succ_pnode NE 0    
+                    add   eax,offset succ_pnode
+              ENDIF      
+              jmp   cleared  
+        OD       
+  FI
+  
+  ret                 
+  
+  
+  
+clear_head_pnode:
+
+  inc   edx
+  jmp   cleared
+  
+  
+  
+  
+  
+XHEAD gen_new_maptab
+
+  ke 'gen_new_maptab'
+  xret  ,long
+  
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+;----------------------------------------------------------------------------
+;
+;       unmap / flush page
+;
+;----------------------------------------------------------------------------
+; PRECONDITION:
+;
+;       ESI   pointer to dest PTE
+;       EBP   pointer to do... variables
+;
+;----------------------------------------------------------------------------
+; POSTCONDITION:
+;
+;       EAX,EBX,EDX,EDI scratch
+;
+;----------------------------------------------------------------------------
+
+
+        align 16
+
+
+flush_page:
+
+  mov   byte ptr [esi],0
+  
+
+
+
+unmap_page:
+
+  mov   edx,esi
+  mov   edi,ds:[linktab_base_PM]
+  
+  shr   edx,log2_pagesize
+  mov   ecx,ds:[cpu_cr3]
+  
+  mov   eax,[edx*linksize+edi].pmap_link
+  sub   edx,edx
+  
+  test  eax,eax
+  IFNZ
+        xor   esi,512
+        xchg  edx,[eax+esi]
+        xor   esi,512
+        test  edx,edx
+  CANDNZ
+  
+        call  unmap_tree
+        
+  FI
+  ret   
+  
+  
+  
+unmap_tree:
+
+  test  edx,1
+  IFZ
+        mov   dword ptr [edx],0         
+        mov   esi,edx
+        
+        shr   edx,log2_pagesize
+        
+        mov   eax,[edx*linksize+edi].pmap_link
+        mov   edx,[edx*linksize+edi].pdir_link
+        
+        xor   edx,ecx
+        
+        shr   edx,1
+        xc    be,unmap_in_own_address_space
+        
+        test  eax,eax
+        IFNZ
+              sub   edx,edx
+              xchg  edx,[eax+esi]
+              test  edx,edx
+              jnz   unmap_tree
+        FI
+        ret
+  FI
+  
+  dec   edx
+  DO
+        push  edx
+        mov   edx,[edx].pte_ptr
+        call  unmap_tree
+        pop   edx
+        
+        mov   eax,edx
+        mov   edx,[edx].succ_pnode
+        
+        test  edx,edx
+        REPEATNZ
+  OD
+  
+  mov   edx,ds:[free_pnode_root]
+  mov   [eax].succ_pnode,edx
+  mov   ds:[free_pnode_root],eax
+  
+  ret                      
+
+
+
+XHEAD unmap_in_own_address_space
+
+  mov   [ebp+tlb_flush_indicator],2
+  xret
+
+
+
+unmap_write_page:
+
+flush_write_page:
+
+   ke   'u/f_write_page'
+   ret
+
+
+
+
+
+
+
+;----------------------------------------------------------------------------
+;
+;       flush address space
+;
+;----------------------------------------------------------------------------
+; PRECONDITION:
+;
+;       EDI   phys pdir address (proot)
+;
+;----------------------------------------------------------------------------
+; POSTCONDITION:
+;
+;       EAX,EBX,ECX,EDX,ESI,EBP scratch
+;
+;----------------------------------------------------------------------------
+
+
+flush_address_space:
+
+  push  edi
+  push  offset flush_address_space_ret+PM
+
+  sub   esp,sizeof do_source_dest_data-sizeof do_source_data
+
+  sub   edx,edx
+  push  edx
+  sub   eax,eax
+  push  eax
+
+  mov   cl,32-log2_pagesize
+
+  mov   ebp,edi
+
+  push  offset flush_page+PM
+  jmp   do_fpage_in_address_space
+
+
+flush_address_space_ret:
+
+  pop   edi
+  ret
+
+
+
+
+;----------------------------------------------------------------------------
+;
+;       remove_from_sigma0_and_pmap
+;
+;----------------------------------------------------------------------------
+; PRECONDITION:
+;
+;       EAX     physical address  (4K aligned)
+;
+;----------------------------------------------------------------------------
+; POSTCONDITION:
+;
+;       frame completely erased in ur ptab (avoids delayed clear)
+;       ptab_link of frame in linktab reset to 0
+;
+;----------------------------------------------------------------------------
+
+
+remove_from_sigma0_and_pmap:
+
+  push  eax
+  push  ecx
+  
+  shr   eax,log2_pagesize
+  imul  eax,linksize
+  add   eax,ds:[linktab_base]
+  sub   ecx,ecx
+  xchg  ecx,[eax]
+  sub   eax,eax
+  mov   [ecx],eax
+  
+  pop   ecx
+  pop   eax
+  ret
+  
+
+ 
+
+;----------------------------------------------------------------------------
+;
+;       map ur page initially
+;
+;----------------------------------------------------------------------------
+; PRECONDITION:
+;
+;       EAX     physical address  (4K aligned)
+;       DL      page attributes
+;       ESI     linear address    (only bits 31...12 relevant)
+;
+;
+;       DS,ES   phys mem / linear space & kernel task
+;
+;----------------------------------------------------------------------------
+; POSTCONDITION:
+;
+;       mapped  (user, read/write, ur)
+;       corresponding pnode_root initialized
+;
+;----------------------------------------------------------------------------
+
+
+  icode
+
+
+
+map_ur_page_initially:
+
+  pushad
+  
+  mov   edi,ds:[linktab_base]
+
+  mov   ebx,eax
+
+  mov   ecx,ds:[((sigma0_task AND mask task_no) + offset tcb_space)].task_pdir
+
+  xpdir eax,esi
+  lea   ecx,[(eax*4)+ecx+PM]
+ 
+  or    dl,page_accessed+page_dirty
+  
+  test  dl,superpage
+  IFZ
+        mov   eax,[ecx]
+        and   eax,-pagesize
+        IFZ
+              push  edx
+              mov   edx,sigma0_task
+              call  map_fresh_ptab
+              
+              mov   edx,eax
+              shr   edx,log2_pagesize
+              
+              mov   [edx*linksize+edi].pdir_link,ecx
+              
+              push  eax
+              mov   ecx,eax
+              and   ecx,-pagesize
+              call  request_fresh_frame
+              sub   eax,ecx
+              mov   [edx*linksize+edi].pmap_link,eax
+              pop   eax
+              
+              pop   edx
+        FI
+
+        xptab ecx,esi
+        lea   ecx,[(ecx*4)+eax+PM]
+        
+        mov   eax,ebx
+        shr   eax,log2_pagesize
+        mov   [eax*linksize+edi].ptab_link,ecx
+        
+        
+  ELIFB ebx,max_physical_memory_size
+  
+        pushad
+        mov   eax,ebx
+        and   dl,NOT superpage
+        DO
+              call  map_ur_page_initially
+              add   eax,pagesize
+              add   esi,pagesize
+              test  eax,MB4-1
+              REPEATNZ
+        OD   
+        mov   eax,[ecx]
+        and   ecx,pagesize-1
+        mov   ds:[ecx+shadow_pdir],eax
+        shr   eax,log2_pagesize
+        sub   ecx,ecx
+        mov   ds:[eax*linksize+edi].pdir_link,ecx
+        popad  
+        
+  FI      
+
+  mov   bl,dl
+  mov   [ecx],ebx
+
+
+  popad
+  ret
+
+
+
+
+  icod  ends
+
+
+
+
+
+
+
+  code ends
+  end

@@ -1,0 +1,31 @@
+
+Contents of \kernel:
+  
+
+adrsman       Address-Space Manager    creates/deletes Adress Spaces, SC task
+cpuctr        CPU Controller           thread switch, FPU, CPU init, Debug-Reg emulation
+dispatch      Dispatcher               dispactching, timer intr, SC thread_switch, SC thread_schedule
+emuctr        Emulation Controller     decodes instructions to be emulated (LLIDT, MOV DRn,...)
+intctr        Interrupt Controller     IDT init, handles all non-kernel relevant exceptions
+ipcman        IPC Manager              SC ipc, device interrupts, SC nearest
+kernel        Kernel Version           contains only the kernel version
+memctr        Memory Controller        initial rudimentory memory manager, before pagctr is up
+pagctr        Page Controller          init paged mode, gen kernel regions, maintains free PTAB pool
+pagfault      Page Fault Handler       page faults
+pagmap        Page Mapper              map, grant, SC unmap
+sgmctr        Segment Controller       init segments
+start         Start                    initializes all LN components, starts LN
+start         Start on PC              PC-specific: ifc to booter, enter prot mode, clock,PIC,NMI
+tcbman        TCB Manager              tcb create/delete, SC lthread_ex_regs
+yoonseva      BIOS interface           special solution for calling BIOS-16 routines
+
+sigma0        Sigma 0 
+
+ktest         Kernel Test              Root Server for kernel test
+
+kdebug        Kernel Debug
+kdio          Kernel-Debug IO
+
+
+
+Only the mentioned files and this file of \kernel are supported.

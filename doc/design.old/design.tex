@@ -1,0 +1,805 @@
+\documentclass[a4paper,10pt,twoside]{article}
+
+\usepackage{draftcopy}
+\usepackage{latexsym}
+\usepackage{a4wide}
+\usepackage{fancyhdr}
+\usepackage{verbatim}
+\usepackage[dvips]{graphicx}
+\usepackage[center]{subfigure}
+\usepackage{hhline}
+\fussy
+\raggedbottom{}
+
+\newcommand{\sigmaz}{\mbox{$\sigma_0$}}
+
+\newcommand{\mkl}{\mbox{L4$\mu$K}}
+\newcommand{\Strong}{\mbox{StrongARM}}
+\newcommand{\SA}{\mbox{\Strong\ SA-1100}}
+\newcommand{\Problem}{\begin{bf}Problem:\end{bf}\ }
+\newcommand{\Note}{\begin{bf}Note:\end{bf}\ }
+\newcommand{\Pseudo}[1]{\verbatiminput{pseudo/#1}}
+\newcommand{\Fu}[2][]{\texttt{#2(#1)}}    % Functions
+\newcommand{\Va}[1]{\texttt{#1}}          % Variables
+
+%% Create top of memlayout table
+\newcommand{\Tmemtop}[1]{%
+  \multicolumn{1}{r}{\raisebox{0pt}[0pt][0pt]{\raisebox{-.6em}{#1}}}&%
+  \multicolumn{2}{c}{}}
+
+%% Create a memlayout cell in a table
+\newcommand{\Tmem}[3]{%
+  \raisebox{0pt}[0pt][0pt]{\raisebox{-.3em}{%
+      \parbox[r][#1][b]{8em}{\hfill #2}}}&%
+  \parbox[c][#1][c]{10em}{\hfil\mbox{#3}\hfill}}
+
+%% Make a large rightbrace
+\newcommand{\rbr}[1]{$\left.\vbox to #1{} \right\}$}
+
+
+% From Anders Andersen (AAndersen@ACM.org)
+% A much nicer footnote.
+\makeatletter
+\let\fnote\footnote
+\def\footnote#1{\@ifnextchar.{\@afootnote{#1}}{%
+\@ifnextchar,{\@afootnote{#1}}{\fnote{#1}}}}
+\def\@afootnote#1{\makebox[0pt][l]{\footnotemark}\footnotetext{#1}}
+\makeatother
+
+\pagestyle{fancyplain}
+
+\renewcommand{\sectionmark}[1]{\markright{\thesection{} #1}}
+
+\lhead[\fancyplain{}{\bfseries\thepage}]
+    {\fancyplain{}{\bfseries\rightmark}}
+\rhead[\fancyplain{}{\bfseries\rightmark}]
+    {\fancyplain{}{\bfseries\thepage}}
+\cfoot[]{}
+\renewcommand{\cleardoublepage}
+    {\clearpage\if@twoside \ifodd\c@page\else
+     \hbox{}\thispagestyle{empty}\newpage\if@twocolumn\hbox{}\newpage\fi\fi\fi}
+
+\setlength{\parskip}{1em plus 0.5ex}
+\setlength{\parindent}{0pt}
+
+
+
+
+
+\begin{document}
+
+\newlength{\centeroffset}
+\setlength{\centeroffset}{-0.5\oddsidemargin}
+\addtolength{\centeroffset}{0.5\evensidemargin}
+
+\thispagestyle{empty}
+\vspace*{\stretch{1}}
+\noindent\hspace*{\centeroffset}
+
+\begin{minipage}{\textwidth}
+  \flushright
+  {\Huge\bfseries Karlsruhe - L4 on ARM\\}
+  \vspace*{\stretch{2}}
+  \noindent\rule[-1ex]{\textwidth}{5pt}\\[2.5ex]
+  \hfill\emph{\Large Design Draft -\today-}\\[2ex]
+\end{minipage}
+
+\vspace{\stretch{1}}
+\noindent\hspace*{\centeroffset}
+
+\begin{minipage}{\textwidth}
+  \flushright
+  \ 
+\end{minipage}
+\vspace{\stretch{2}}
+
+\newpage
+
+\tableofcontents
+
+\cleardoublepage
+
+\section{Introduction}
+
+This document outlines the current Karlsruhe design of the L4 Micro-Kernel for the ARM Architecture (L4/ARM).
+
+This document assumes familiarity with the \mkl, the 'ARM Architecture Version 4' (See ARM ARM) and the 'Intel SA-1100 CPU' (See SA-1100 TRM).
+
+\newpage
+\section{Design Structure}
+
+This section discusses the major design structures of the kernel. 
+
+\subsection{ARM Register Banking}
+
+The ARM architecture provides 6 sets of banked registers for different
+exceptions. The normal user set, as well as the abort, IRQ, FIQ, supervisor
+and undefined sets. The LR (link registers) is set by exception entry to the
+PC (program counter) at the time of the exception so its not so interesting
+however the SP (stack pointer) is also banked and is of interest to us
+immediately after an exception. The idea of this SP banking is that each
+exception has its own stack so the a kernel doesn't need to load or store it
+between exceptions. However L4 uses a kernel stack per thread and no matter
+what exception arises L4 wants to stack the interrupted state on the
+interrupted threads kernel stack so the banked SP is more a hindrance
+than a help.
+
+There are three ways to deal with this banking of the SP. The first is to
+ignore the banked registers and use only a single mode for the kernel. By
+using just the abort mode we can minimize the need to switch modes often.
+This can be done by using prefetch aborts to generate syscalls in the abort
+mode. The prefetch abort handler simply checks where the abort occurred and
+if it is a special address it is treated as a syscall, the cost of this is
+approximately the same as a SWI instruction with the syscall number in a
+register. Prefetch/Data aborts execute in the abort mode already so the
+cases requiring speed (Syscalls and page faults) all enter the kernel with
+the current threads kernel stack already set up in the abort SP. SWI and
+undefined instruction exceptions are not so time critical (they result in an
+exception IPC to the threads exception handler) so they can switch to the
+abort mode manually, IRQs and FIQs however do take a penalty to manually
+switch and we lose most of the benefits of the extra 5 banked registers in
+the FIQ mode.
+
+The second method is to use a non-banked register as the kernel stack.
+This costs the setup time of loading the current threads kernel stack pointer
+whenever we first enter the kernel from the user mode but has the advantage
+that the kernel stack is accessible from any mode so preemption within the
+kernel is fast (the kernel stack is already loaded) and the IRQs/FIQs get the
+benefit of not requiring to switch modes as well as FIQs having the extra
+5 banked registers to allow fast FIQ handling. We also free up a banked
+register (the SP) which we can store data in that will remain unchanged
+during exceptions that put the kernel into a different CPU mode or during
+the user mode for example we could load the kernel miscellaneous data pointer
+in here. An added cost the unbanked kernel stack pointer registers must moved
+to a temporary register if an exception (other than a syscall. syscalls could
+use this register as the syscall number which can be trashed after the syscall
+is dispatched) is raised in the user mode. This method is nice for an assembly
+implementation but has problems with standard C/gcc, however certain registers
+could be assigned invariant values so while we are in the kernel. This might
+be a nice property but it requires hacking gcc to change the register used for
+the stack pointer and to associate the registers with variables (this may just
+require some ASM glue in the C functions).
+
+The last method is to use the SP of the supervisor mode and load it before
+switching to the user mode (so its already loaded for syscalls). This however
+requires switching to the supervisor mode (when the kernel is preempted) and
+then using that mode to handle the exception. If the user is preempted their
+stack is empty so we can just load it and stay in the current mode. This
+method is essentially the same as the first but lacks the benefits of having
+page faults fast (since they share the same mode as the syscalls do) so its
+probably not worth considering.
+
+While the first method is attractive for a C implementation it has
+implementation difficulties which make it a little doubtful whether any real
+gains are made and if it doesn't indeed cost more than the second method.
+For now we are using the first method since the second would require gcc
+modification.
+
+\subsection{Quality of Service Scheduling (Adam's Random Jiberish)}
+
+To support the implementation of any scheduling policy all time must be
+accounted for and strict priorities maintained. Since the kernel executes in
+the context (on the kernel stack of at least) of the currently running thread
+(the last thread an exception was raised in, be it a syscall or not) or the
+thread currently being switched to we can simply extend this so that the
+kernel operation runs under the time slice and the priority of the current
+thread as well. Then if the time slice runs out or a higher priority thread
+becomes ready the current kernel context is stacked and we switch to the new
+thread. This system does have problems if the kernel is in a non-preemptable
+state and the time slice runs out or a higher priority thread becomes ready,
+since it will be delayed until the kernel enters a preemptable state again. 
+
+$<$Adam: So I'm not sure how much of a problem this is or what potential
+solutions exist$>$
+
+Another issue with a fully preemptable kernel is how to handle locked data
+structures. One possible method is to use something similar to Fiasco's
+transaction scheme. For quick operations interrupt masking can be used (on a
+uni-processor system) to lock critical sections. While the the transaction
+scheme could be used for time intensive operations that aren't as critical
+(for example, task deletion, flushing of mappings and possibly long IPC). So
+with the long operations the thread wanting the lock can donate its time
+slice/priority to the preempted thread that has the lock. 
+
+\subsection{Kernel Preemption}
+
+One of the goals of the kernel design is to have a kernel suitable for real
+time systems. This requires a bound maximum time that the kernel is not
+preemptable.
+
+Kernel Code fits into two general categories:
+
+\begin{itemize}
+\item Preemptable sections, and
+\item Non-Preemptable sections
+\end{itemize}
+
+Preemptable section are fine, we unmask both IRQs and FIQs and the kernel can
+be interrupted at any time. For non-preemptable time bound operations (if the
+operation time is bound and fast the kernel is suitable for real time systems)
+we need to mask both IRQs and FIQs. IRQs are not a problem since on the
+generation of any exception they are masked out by the hardware. However FIQs
+are not masked for any exception (except and FIQ) so between the exception
+and the code masking the FIQ bit an FIQ may be raised. Since the user state
+may not be stacked at this stage we must either either stack the whole of the
+register set (the unbanked registers r0-r12, the user bank
+$<$user\_mode$>$\_SP/\_lr) and the interrupted exception bank
+$<$exception\_mode$>$\_SP/\_lr) which is very expensive (while we can use
+store multiple to access the user bank the exception bank can only be saved
+by switching to it which is expensive) or come up with something else. Since
+FIQs are supposed to be for very time critical interrupts this would not be
+a good option.
+
+On the SA-1100 (and other ARM CPUs/Platforms with an interrupt controller
+which can direct to either the IRQ or FIQ) the simple solution to direct all
+interrupts to IRQ signal then the FIQ exception is never raised and is not an
+issue. However some ARM CPUs/Platforms like the 7110 (ARM7) hardwire some
+interrupts to the IRQ signal and the rest to FIQ signal so we cannot solve
+the FIQ exception problem by ignoring it. What we can do is get the FIQ
+dispatcher/handler to work out what state it interrupted and if it was a
+kernel mode that was interrupted before it could mask IRQ/FIQ we return to it
+and allow it to finish what it was until its in a preemptable state. The
+simple solution is as follows.
+
+On exception entry to the kernel F=0 (FIQ mask bit), I=1 (IRQ mask bit). The
+kernel then either sets the F/I bits (non-preemptable) OR stacks the user
+state and then clears the F/I bits (preemptable) once the F/I bits are set
+the kernel code is in 'safe' state.
+
+The FIQ dispatcher on entry (FIQ exceptions mask both IRQs/FIQs) checks the
+SPSR for the mode of the CPU which was preempted. If user mode was preempted
+we just go about handling the FIQ (we can always preempt the user). If kernel
+mode was preempted we have to check the F/I bits:
+
+\begin{itemize}
+\item F=0/I=0: Kernel is in a 'safe' preemptable state so go about handling FIQ
+\item F=0/I=1: Kernel is not in the 'safe' state so switch back to it masking
+the FIQ in the process. Then F=1,I=1 and no FIQ can preempt the kernel until
+it unmasks interrupts at which time the FIQ handler will be invoked again
+(since the interrupt was not cleared)
+\item F=1/I=X: N/A, since by definition the FIQ handler can not be entered
+\end{itemize}
+
+So all the FIQ dispatcher needs to do is check the state of the I bit. This
+solution has a nice bound overhead since the worst case is a single FIQ being
+generated in the 'unsafe' state returning straight away until the kernel is
+ready to be preemptable. This worst case is the non-preemptable time plus the
+time for an FIQ to trap and return quickly with this masking. In all cases
+the SPSR must be loaded into a register so the only cost is checking the
+mode/I states of the SPSR. This way minimal overhead is added to the FIQ path
+keeping FIQs in the user state and preemptable kernel state fast.
+
+In the case of the SA-1100 (and other ARM systems) where we can route
+interrupts to either FIQs or IRQs it is still a little up in the air what to
+do. Routing all interrupts to IRQs means the kernel can not be preempted in
+the 'unsafe' state so it saves us the cost of trapping the FIQ, returning and
+then trapping again later. Routing all to FIQs means the interrupt handler
+code has more banked registers to play with. Splitting the routing allows us
+to do something like route all user interrupts to the one handler and kernel
+interrupts to the other. This would allowing simpler handlers (in terms of
+implementation) and allow the more register intensive of the two to have the
+banked registers while the less register intensive one avoids the overhead of
+the double trap.
+
+
+\subsection{Kernel memory management}
+\label{sec:kmem-management}
+
+Some mechanism must exist inside the kernel for dynamically allocating
+and freeing memory.  More precisely, management of 1KB, 4KB, and 16KB
+chunks of memory (frames) must be supported.  These frames are needed
+by the following kernel mechanisms:
+
+\begin{description}
+\item{\bf TCB management:} requires allocation and freeing of 4KB
+  frames for holding TCBs.
+\item{\bf Page table management:} requires allocation and freeing of
+  16KB for holding first level page tables, and 1KB frames for holding 
+  second level page tables.
+\item{\bf Mapping database:} requires allocation and freeing of 8
+  byte, 16 byte, and 128 byte buffers.  Management of these fine
+  grained buffers however, are handled by the mapping database itself
+  (see Section~\ref{sec:mapping-db-alloc}).  Coarse grained allocation
+  is always performed in chunks of 4KB frames.
+\end{description}
+
+When designing the memory management system we should try to optimize
+for \emph{allocation} of frames; the reason being that frame
+allocation may be used in an IPC map operation (i.e.\ by the page
+table manager and the mapping database).  As such, we keep a separate
+frame list for each of the different frame sizes.  Freeing frames on
+the other hand, is not very time critical.  The operation should
+however---if it is time consuming---be made preemptable in order to
+make the kernel suitable for real-time systems.
+
+We should also allow for movement of frames between the different
+frame lists so as to avoid the situation where we have sufficient 4KB
+frames to make a 16KB frame, but since the 16KB frame list is empty
+the operation to allocate a 16KB frame fails (the same goes for
+allocating a 4KB frame when there are available 16KB frames).  Now,
+moving frames from the 16KB frame list into the 4KB frame list is
+easy.  It is a simple matter of splitting the 16KB frames.
+Concatenating four 4KB frames into a 16KB frames is somewhat tricker
+since we have to find four consecutive frames in the 4KB frame list.
+One solution to the problem is to search through the whole frame lists
+in order to find four consecutive pages.  This is obviously too
+inefficient, especially if we take into consideration that the map
+operation---which may require frames to be allocated---is to be fast.
+Another solution to the problem is to always keep frame lists sorted.
+This will however require far too much overhead when freeing frames,
+and even though freeing frames is not such a time critical operation,
+the operation will be difficult to make preemptable.
+
+Our solution to the problem is to keep parts of the frame lists
+ordered.  We keep clusters of four consecutive and properly aligned
+frames in the end of the frame lists (see
+Figure~\ref{fig:clustering}).  A \emph{cluster pointer} points to the
+first frame in the frame list belonging to a cluster.  When, say a
+16KB frame needs to be allocated from the 4KB frame list, the frames
+in the first cluster in the 4KB frame list are removed, and the
+cluster pointer is updated to point to the next cluster.  The
+invariant is that all frames in a frame list following a cluster
+pointer are organized in clusters.  Keeping clusters in the end of the
+frame lists also ensures that clusters are not unnecessarily split up
+if there are free frames elsewhere in the system.
+
+\begin{figure}[tbp]
+  \begin{center}
+    \includegraphics{fig/figure.1}
+    \caption{Frame lists and clustering}
+    \label{fig:clustering}
+  \end{center}
+\end{figure}
+
+It is the responsibility of the free operation to organize the
+clusters in the frame lists.  This is accomplished by checking the
+surrounding frames which makes up a cluster each time a frame is being
+freed.  If all three surrounding frames are found to be non-allocated,
+the four frames are concatenated and moved back into the cluster area
+of the frame list.
+
+As of today, a fixed amount of memory is dedicated to the kernel
+memory allocation.  One possible extension of memory allocator is
+therefore to have a protocol between \sigmaz\ and the kernel in order
+to allow free frames to flow between the two.  This allows dynamic
+balancing of memory allocation between the kernel and the user space,
+and avoids compile (or boot) time parameterization of the kernel/user
+memory allocation ratio.
+
+
+\subsection{Mapping database}
+\label{sec:mapping-db}
+
+To support mapping/granting of pages (whether by \Fu{ipc} or a pager)
+and flushing of pages (whether by \Fu{fpage\_unmap} or task deletion)
+a record of the hierarchical mappings/grantings must be maintained.
+This is accomplished using a mapping database.  For the ARM
+implementation, three specific design problems regarding the mapping
+database should be considered:
+
+\begin{enumerate}
+\item How to keep the mapping database as small as possible (because
+  the typical ARM platforms supply limited memory).
+\item How to maintain support for real time systems via time bound or
+  preemptable operations (because the typical application areas of ARM
+  require speed and often some form of quality of service or real-time
+  guarantees).
+\item How can the mixed page sizes of the ARM (or any other CPU for
+  that matter) be supported.
+\end{enumerate}
+
+\begin{figure}[tbp]
+  \begin{center}
+    \subfigure[Prior to flushing]{%
+      \includegraphics[scale=1]{fig/figure.2}}%
+    \label{fig:mapsplit-1}%
+    \hspace{1cm}%
+    \subfigure[After flushing]{%
+      \includegraphics[scale=1]{fig/figure.3}}%
+    \label{fig:mapsplit-2}%
+    \caption{Mapping tree replication due to flushing a
+      single page within a larger page.  The grey box marks the page
+      that has been flushed.}
+    \label{fig:mapsplit}
+  \end{center}
+\end{figure}
+
+Beyond pure implementation issues, the only conceptual hard problem of
+these is to support multiple page sizes.  The essence of the problem
+can be illustrated by the following example: A task, $A$, has mapped a
+64KB page to task $B$, which subsequently has mapped the page to tasks
+$C$ and $D$ (Figure~\ref{fig:mapsplit}(a)).  Now, task $A$ wants to
+flush a single 4KB page within the page.  In order to accomplish this,
+the 64KB page must first be split into sixteen 4KB pages
+(Figure~\ref{fig:mapsplit}(b)).  The splitting of the 64KB page also
+involves replicating the mapping three below task $A$ fifteen times.
+
+Unfortunately, the example above also applies if task $A$ wants to map
+or grant one 4KB page within the larger page.  This is not acceptable
+because it; (1) requires too much overhead, and (2) is difficult to
+make preemptable.  We can however overcome the problem of replication
+if we allow mapping trees to be shared between different mappings.
+Figure~\ref{fig:mapshare} illustrates how this works.  First, to find
+the mappings of a specific task, the physical address of the mapping
+is used to index into a set of tables (in much the same way that
+physical addresses in a page table are found using the virtual address
+for indexing).  The result of this lookup is a pointer to a mapping
+tree, which is parsed in order to find a specific mapping node.  Now,
+A task, $A$, has mapped a 64KB page to tasks $B$ and $C$
+(Figure~\ref{fig:mapshare}(a)).  The task then wants to flush all its
+mappings in the last 4KB page of the 64KB page.  This is accomplished
+by first splitting the 64KB page into 4KB pages, and then using the
+\emph{old} mapping tree for all but the last 4KB page
+(Figure~\ref{fig:mapshare}(b)).  The only mapping tree that has to be
+created/replicated, is the one below $R^{2.15}_{4k}$.
+
+\begin{figure}[tbp]
+  \begin{center}
+    \subfigure[Prior to flushing]{%
+      \includegraphics[scale=1]{fig/figure.4}}%
+    \label{fig:mapsshare-1}%
+    \hspace{1cm}%
+    \subfigure[After flushing]{%
+      \includegraphics[scale=1]{fig/figure.5}}%
+    \label{fig:mapshare-2}%
+    \caption{Mapping tree sharing due to flushing a smaller page
+      within a large page.  Only one new mapping tree (the one below
+      $R^{2.15}_{4k}$) has to be created.}
+    \label{fig:mapshare}
+  \end{center}
+\end{figure}
+
+The trick to enabling a mapping tree to be shared between different
+mappings is to differ between root nodes ($R$-nodes in the figure) and
+mapping nodes.  Mapping nodes must not contain information that is
+valid for only one mapping (e.g.\ the virtual memory location of the
+mapping).  Root nodes must not contain information which is not valid
+for all mappings below it (e.g.\ the task owning the mapping).
+
+To figure out the virtual memory location of a mapping, a memory
+offset is stored in the mapping node instead of a memory location.
+The offset is relative to a physical memory location associated with
+the root node.  The memory location of the mapping is calculated by:
+\[
+virtual\ address = physical\ address + offset\ in\ mapping\ node
+\]
+
+Using this mapping scheme, the mapping tree of a split node may be
+shared by all root nodes in the newly created root node table.
+However, the mapping tree can not be shared if, say task $C$ wishes to
+change the virtual memory address of one of its 4KB mappings.  This
+does not make much sense though.
+
+In order to keep track of the number of root nodes which uses a
+mapping tree, the mapping node in the root of the mapping tree
+contains a reference counter.  The reference counter is large enough
+to support sharing between all nodes after a split operation (i.e\ 16
+nodes), but not large enough to support sharing of cascading split
+operations (e.g.\ a 64KB node which is split to 16KB nodes which is
+subsequently split into 4KB nodes).  A larger reference counter would
+allow for this sort of sharing, but would also make the mapping node
+larger, hence requiring more memory for a mapping tree.  It is still
+unclear which of the two schemes which are the better.
+
+
+\subsubsection{Mapping database memory management}
+\label{sec:mapping-db-alloc}
+
+In Section~\ref{sec:kmem-management}, we mentioned that the mapping
+database is itself responsible for allocating the fine grained buffers
+used for the different mapping database structures.  The different
+buffer sizes required by the mapping database are: 8 bytes for mapping
+nodes, 16 bytes for 1KB root node tables, and 128 bytes for 4KB and
+64KB root node tables.
+
+Each of the different buffer sizes have an associated list of frames
+containing free buffers (see Figure~\ref{fig:mdb-mem}).  The first few
+bytes of each of these frames are dedicated to management structures.
+The rest of the frames contains the buffers proper.  The management
+structure is used to keep track of the free buffers in the frame.  It
+contains: a pointer pointing to a list of free buffers, a counter
+keeping track of the number of free buffers, and a pointer to the next
+frame of free buffers.
+
+When a buffer is allocated from a frame, the buffer is removed from
+the list of free buffers, and the counter for the number of free
+buffers is updated.  If the counter reaches zero, the whole frame is
+removed from the frame list.  This avoids further accesses to the
+frame when a new buffer is to be allocated.
+
+When a buffer is de-allocated, it is hooked into the list of the frame
+it belongs to, and the counter of free buffers is updated.  If the new
+counter value equals to one, it indicates that all the buffers in the
+frame was previously allocated.  This in turn implies that the frame
+has been removed from the frame list.  As such, we will have to hook
+it into the frame list again\footnote{We may also choose to hook the
+  frame into the frame list when the counter reaches some higher
+  value.  This will prohibit the next allocate buffer operation to
+  empty the buffer list and remove the frame from the frame list.
+  Using such a scheme, there will be less insertion/removal operations
+  on the frame list.}.  If the new counter value reaches its maximum
+(determined by the buffer size), it indicates that all the buffers in
+the frame has been freed.  The frame may then be handed back to the
+kernel memory allocator, or it may be moved to the back of the frame
+list to make the frame less likely to be allocated from in the future.
+This latter option is useful if we want to free the frame at some
+later stage.
+
+\begin{figure}[tbp]
+  \begin{center}
+    \includegraphics{fig/figure.6}
+    \caption{Memory management in mapping database}
+    \label{fig:mdb-mem}
+  \end{center}
+\end{figure}
+
+Another feature of the mapping database memory manager is that it
+tries to keep adjacent mapping nodes in the same cache line (32
+bytes).  This is accomplished by allocating buffers at 32 bytes
+granularity.  Such a buffer is able to hold four mapping nodes of 8
+bytes each.  When a mapping node is allocated in a new cache line, a
+32 byte buffer is allocated, and the first word in each of the mapping
+nodes (i.e.\ bytes 8--12, 16--20, and 24--28) are zeroed.  Bytes 0--8
+are then used for holding the new mapping node.  Upon allocating an
+adjacent mapping node, the first word in the three surrounding mapping
+nodes are examined.  If any of these words is zeroed, it means that
+the buffer is not allocated, and may be used for holding the adjacent
+node.  If none of the words are zeroed, a new cache line has to be
+allocated.  Using a zeroed first word in the buffer to indicate that
+the buffer is free can only work if the an allocated buffer does not
+ever have the first word zeroed.  This can be assured because the
+first word of the mapping node contains the task id of the mapping,
+which may not be a zero one.
+
+
+\subsection{Memory Layout}
+
+The L4/ARM kernel is currently developed on two different platforms:
+the ``Brutus'' evaluation board (SA-1100), and the DNARD (SA-110).  As
+seen in Figure~\ref{fig:memlayout-physical}, there is a considerably
+difference in the physical memory layout for the two platforms.  In
+order to ease cross platform development---in particular with respect
+to the physical DRAM locations---the physical memory layout is
+virtualized as seen in Figure~\ref{fig:memlayout-virtual}.
+
+\begin{figure}[tbp]
+  \begin{center}
+    \subfigure[Brutus]{%
+      \scalebox{.6}{%
+        \begin{tabular}{r|c|l}
+          \Tmemtop{0xFFFF~FFFF} \\
+          \hhline{~-}
+          \Tmem{2.5em}{0xE800~0000}{Reserved} \\
+          \hhline{~-}
+          \Tmem{1.5em}{0xE000~0000}{Zero bank} & \raisebox{0pt}[0pt][0pt]{
+            \rbr{.9em} \parbox[l]{10em}{Used for cache flushing}} \\
+          \hhline{~-}
+          \Tmem{4.5em}{0xC000~0000}{DRAM space} & \raisebox{0pt}[0pt][0pt]{
+            \rbr{2.3em} \parbox[l]{10em}{\flushleft Split into 4
+              equally sized banks at $x \times 128 \rm MB$}} \\
+          \hhline{~-}
+          \Tmem{4em}{0x8000~0000}{I/O register space} \\
+          \hhline{~-}
+          \Tmem{4em}{0x2000~0000}{PCMCIA space} \\
+          \hhline{~-}
+          \Tmem{2em}{0x0000~0000}{SRAM space} \\
+          \hhline{~-}
+        \end{tabular}
+        }}%
+    \label{fig:memlayout-brutus}%
+    \subfigure[DNARD]{%
+      \scalebox{.6}{%
+        \begin{tabular}{r|c|l}
+          \Tmemtop{0xFFFF~FFFF} \\
+          \hhline{~-}
+          \Tmem{3em}{(\emph{unknown})}{(\emph{unknown})} \\
+          \hhline{~-}
+          \Tmem{3em}{0x4000~0000}{I/O register space} \\
+          \hhline{~-}
+          \Tmem{3em}{0x1000~0000}{(\emph{unknown})} \\
+          \hhline{~-}
+          \Tmem{4.5em}{0x0C00~0000}{DRAM space} & \raisebox{0pt}[0pt][0pt]{
+            \rbr{2.3em} \parbox[l]{10em}{\flushleft Split into 4
+              equally sized banks at $x \times 32 \rm MB$}} \\
+          \hhline{~-}
+          \Tmem{3em}{0x0000~0000}{(\emph{unknown})} \\
+          \hhline{~-}
+        \end{tabular}%
+        }}%
+    \label{fig:memlayout-dnard}%
+    \caption{Physical memory layout}
+    \label{fig:memlayout-physical}
+  \end{center}
+\end{figure}
+
+\begin{figure}[tbp]
+  \begin{center}
+    \begin{tabular}{r|c|l}
+      \Tmemtop{0xFFFF~FFFF} \\
+      \hhline{~-}
+      \Tmem{2.1em}{0xFFFF~1000}{Kernel} & \raisebox{-7em}[0pt][0pt]{
+        \rbr{8.2em} \parbox{10em}{Shared by all address spaces (512MB)}}\\
+      \hhline{~-}
+      \Tmem{1em}{0xFFFF~0000}{Expt.\ vec.\ (relocated)} \\
+      \hhline{~-}
+      \Tmem{3.2em}{0xFFF0~0000}{I/O mappings} \\
+      \hhline{~-}
+      \Tmem{4.2em}{0xF000~0000}{Contiguous RAM} \\
+      \hhline{~-}
+      \Tmem{5.3em}{0xE000~0000}{TCBs} \\
+      \hhline{~-}
+      \Tmem{8em}{0x0000~1000}{User memory} \\
+      \hhline{~-}
+      \Tmem{1em}{0x0000~0000}{Exception vector} & \raisebox{0pt}[0pt][0pt]{
+        \rbr{.5em} \parbox{10em}{Shared by all address spaces (4KB)}} \\
+      \hhline{~-}
+    \end{tabular}
+    \caption{Virtual memory layout}
+    \label{fig:memlayout-virtual}
+  \end{center}
+\end{figure}
+
+%\begin{table}[ht]{\centering
+%\begin{tabular}{|c|c|}
+%\hline
+%0x0000.0000 - 0x1FFF.FFFF & SRAM space (512MB)\\
+%0x2000.0000 - 0x3FFF.FFFF & PCMCIA space (512MB)\\
+%0x8000.0000 - 0xBFFF.FFFF & I/O register space (1GB)\\
+%0xC000.0000 - 0xDFFF.FFFF & DRAM space (512MB, split into four equally sized banks, at x*128MB)\\
+%0xE000.0000 - 0xE7FF.FFFF & Zero bank (128MB)\\
+%\hline
+%\end{tabular}
+%\caption{Brutus' Physical Memory Layout - 32MB DRAM installed }
+%}\end{table}
+
+%\begin{table}[ht]{\centering
+%\begin{tabular}{|c|c|}
+%\hline
+%0x0c00.0000 - 0x0FFF.FFFF & DRAM space (512MB, split into four equally sized banks, at x*32MB)\\
+%0x4000.0000 - ? & I/O register space\\
+%\hline
+%\end{tabular}
+%\caption{DNARD's Physical Memory Layout - 32MB DRAM installed }
+%}\end{table}
+
+%\begin{table}[ht]
+%\begin{tabular}{|c|c|}
+%\hline
+%0x0000.0000 - 0x0000.03FF & exception vector page (non relocated)\\
+%0xE000.0000               & TCB array\\
+%0xF000.0000               & DRAM - mapped as a contiguous area - XXX: is this ok?\\
+%0xFFF0.0000               & kernel IO mappings (timers, kdebug's serial ports, ...)\\
+%0xFFFF.0000 - 0xFFFF.0FFF & exception vector page (relocated)\\
+%0xFFFF.1000 - 0xFFFF.FFFF & kernel code/data/misc\\
+%\hline
+%\end{tabular}
+%\caption{Virtual Memory Layout}
+%\label{tab:kernel-virt-mem}
+%\end{table}
+
+Some words on the virtual memory layout is probably in place here.
+First of all, the upper 1MB is dedicated to holding the kernel's code
+and static data.  We estimate this to be less than 60KB.  The first
+4KB of the upper 1MB is also used for holding the relocated exception
+vector.  Being able to relocate the exception vector is a feature of
+the SA-1100.  It is useful for three reasons:
+
+\begin{enumerate}
+\item User-level programs may be located at address zero and upwards
+  (the default behavior for most compilers).
+\item The code within the exception vector page may use short jumps to 
+  anywhere within the kernel.  If the exception vector is located at
+  address zero, this is not possible.
+\item The kernel code (and static data) will require only one TLB
+  entry (the page table entry for the topmost 1MB section).  If the
+  exception vector is located at address zero, the kernel will require
+  two TLB entries (one for the zero page, and one for the topmost 1MB
+  section).
+\end{enumerate}
+
+If we are not able to relocate the exception vector, an optimization
+for the latter case is to keep the the most time critical kernel code
+(i.e.\ the short IPC path) in the same 4KB page as the exception
+vector.  This will ensure that we get at most one TLB miss when doing
+short IPC.
+
+We also keep all available DRAM in the system in one contiguous block
+of virtual memory.  This makes memory management much simpler.
+Moreover, since the contiguous ``physical'' RAM area is shared by all
+address spaces, all dynamic kernel memory should be accessed using the
+``physical'' address.
+
+The contiguous RAM is all mapped as 1MB sections.  This enables the
+dynamic kernel memory to occupy few page table entries.  As such, the
+number of TLB misses caused by the kernel (e.g.\ when walking the page
+tables, or accessing the mapping database) is minimized.
+
+$<$We should have something on the TCB array here.$>$
+
+\newpage
+\section{Data Structures}
+
+This section introduces the kernel data structures and their use.
+
+\subsection{Kernel Miscellaneous Data}
+
+The kernel miscellaneous data contains miscellaneous information required by the kernel that doesn't fit in any other data structure. Things like the the heads of the ready queues and present list as well as the memory allocator information.
+
+$<$Adam: show the items from the kernel miscellaneous data and explain their use/need$>$
+
+\subsection{Task Table}
+
+The task table is needed to keep track of a minimal set of task information since when a task is inactive is has no TCBs associated with it. The minimal information needed is the tasks state (a single bit) to indicate if the task is active or not as well as the task number of the chief (owner) of the task. The remaining bits can contain other task info that changes often.
+
+\subsection{Task Page Tables}
+
+The task page tables are simply the hardware loaded page tables specified by ARM. The Page directory pointer for each task is stored in the TCB of each thread in the given task.
+
+Since the kernel mappings are a reserved part of the address space all task page tables must have a copy of the kernel mappings. Consistency is maintained by adding new mappings to the kernel page table and lazily adding the mappings to other address spacing upon kernel faults.
+
+\Problem How do we keep mappings consistent when they are removed? Do we have to examine every task page table???
+
+When flushing a task's TCBs on task\_delete, we do not remove the 2nd level page tables, we just invalidate all 2nd level entries. Doing reference counting on that 2nd level page tables to find unused pages might be a job for a kernel garbage collector.
+
+\subsection{Thread Control Blocks}
+
+Thread control blocks contain all information associated with a particular thread including the kernel stack for that thread. A large virtual array is used to allow fast lookup of a TCB from the threads TID (Thread ID). TCB's are demand paged. A read fault on a TCB block first checks if the TCB is mapped in (via checking for a mapping in the sigma0 page table) if not allocates a read only zeroed page (a Null TCB), write faults after checking for the same 'is the TCB mapped in' situation map in a fresh zeroed 4KB frame since write faults are only generated from thread creation (via lthread\_ex\_regs).
+
+$<$Adam: fill in the contents of the TCB and use/etc$>$
+
+$<$Uwe: Null TCB sounds somewhat strange. A single zeroed page mapped to the various places should do the job.
+
+
+\subsection{Present List}
+
+The present list is used for task delete, it is a doubly linked circular list with partial ordering. The partial ordering is that for any task if we start at lthread0 then to our right are all the threads of our task once the task id changes we are at the end of our tasks threads. This way starting at lthread0 we can find and kill all threads in our task in one sweep. To the left of the lthread0 we have all our child task threads until we hit a task depth that is equal to or less than our own. This way we can search for lthread0's of our child tasks by looking for task depths one less than or equal to ours and getting them to start task delete.
+
+The ordering is maintained by adding new threads to the right (via lthread\_ex\_regs) of the caller thread and adding new tasks (lthread0's via task\_new) to the left of the caller task's lthread0.
+ 
+\subsection{Ready Queues}
+
+Runnable threads are in the ready queues. Ready queues are (doubly linked?) circular lists to implement round robin scheduling. There's a ready queue per priority. The pointers to the next runnable threads are stored in an array. Once a certain thread has been selected to be run, the ready queue pointer for that priority is advanced. 
+
+For a scheduling decision, the array is searched for an entry, starting from the highest priority. An optimization would be to store the highest existing/runnable priority. (Keeping track of that would require monitoring of the following events: Create a thread, enqueue/dequeue from ready queue, ... what else?)
+
+$<$Adam: should we put something more here?$>$
+
+\subsection{Wakeup Queue}
+
+A single ordered wake up queue could be used as a starting point but when large it might become a bottle neck.
+
+A 'Real' design is needed here... (optimization!)
+
+\subsection{Mapping database}
+
+
+
+\newpage
+\section{Kernel Procedures}
+
+This section outlines the operations the kernel performs.
+
+\subsection{Exception Entry/Exit}
+
+\subsection{Data Aborts}
+
+\subsection{Prefetch Aborts}
+
+\subsection{Undefined Instructions}
+
+\subsection{Software Interrupts}
+
+\subsection{IRQ Interrupts}
+
+\subsection{FIQ Interrupts}
+
+
+\subsection{Test Zone - do not read}
+\cite{ARMARM}
+
+\bibliographystyle{alpha}
+\bibliography{arm}
+
+\end{document}
+
+

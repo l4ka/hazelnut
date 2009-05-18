@@ -1,0 +1,32 @@
+Thread migration in L4/KA SMP
+
+Statement: Migrating ourselvs is not allowed
+Reasoning: Usually, the per-cpu scheduler migrates threads around, but never itself.
+
+Temp: Only running threads are migrated
+
+
+Notation: X:y/z   - Thread X, cpu=y, ctrl_cpu=z
+	  X:Y->z  - Thread X migrates Thread Y to CPU z
+	  deq(X)  - dequeue Thread X from READY and PRESENT queue
+	  enq(X)  - enqueue Thread X into READY and PRESENT queue
+
+
+CPU		0		1		2		3
+
+A:0/0		deq(B)
+B:0/0		----IPI(B,1)---->
+A:B->1		poll(0)		cont(0)
+				enq(B)
+
+
+A:0/0		----IPI(B,0)---->
+B:1/1		poll(0)		deq(B)
+A:B->0		enq(B)		cont(0)
+
+
+#if (we allow A on x to migrate B from y to z where x != y != z != x, A != B)
+A:0/0		
+B:1/1		Orneeedadenkschheutnimmerdrübernach!
+A:B->2
+#endif

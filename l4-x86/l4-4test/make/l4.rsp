@@ -1,0 +1,2 @@
+kernel5 startpc  start   cpuctr5  ipcman5 dispatch intctr tcbman memctr sgmctr+
+pagctr5 pagfault pagmap5 adrsman5 emuctr  kdiopc kdebug sigma0 ktest5 ,l4.exe,l4.map;

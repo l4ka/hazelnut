@@ -1,0 +1,345 @@
+<!doctype html public "-//w3c//dtd html 4.0 transitional//en">
+<html>
+<head>
+   <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+   <meta name="GENERATOR" content="Mozilla/4.72 [en] (X11; I; Linux 2.2.14 i686) [Netscape]">
+   <meta name="Author" content="Uwe Dannowski">
+   <meta name="Description" content="This file should record some kind of daily report.Here we note down the problems we stumbled over, our soulutionsand what we learned how to do or better not do certain things.">
+   <title>L4/KA - A diary</title>
+</head>
+<body>
+
+<h2>
+Pending problems</h2>
+
+<h4>
+on a write, ARM reports a read pagefault first if no mapping was present
+(u)</h4>
+
+<blockquote>I fear, we have to do this evil code analysis thing on a <i>translation
+abort</i> to figure out whether it was a read or a write access.
+<br>Write accesses on read-only mapped pages are fine - these cause a <i>permission
+abort</i>.</blockquote>
+
+<h4>
+L4/Linux enter_kdebugs "non linux task" (u)</h4>
+
+<blockquote>The linux kernel received an IPC with no error code, but the
+sender's thread_id was not valid.
+<br>Non-solution: Some exits in sys_ipc returning an error code didn't
+keep the dest_id as specified.
+<p>Note: Not seen anymore since 2000-04-10.</blockquote>
+
+<h2>
+
+<hr WIDTH="100%">2000-01-18</h2>
+
+<h4>
+IPC via sysenter/sysexit works (u)</h4>
+
+<blockquote>We use a modified version of Jochen's proposal for the int
+0x30 replacement
+<br>The kernel esp is restored from the tss.esp0 location directly after
+entering the kernel. This saves the expensive (serializing) wrmsr to update
+the MSR_0x175.</blockquote>
+
+<h2>
+
+<hr WIDTH="100%">2000-01-17</h2>
+
+<h4>
+First steps towards the sysenter/sysexit IPC mechanism</h4>
+
+<blockquote><b>sysenter</b>: MSR_0x174 -> cs; MSR_0x174 + 8 -> ss; MSR_0x175
+-> esp; MSR_0x176 -> eip
+<br>The esp register is overwritten on sysenter, no return information
+is saved implicitly.
+<br><b>sysexit</b>: MSR_0x174 + 16 -> cs; MSR_0x174 + 16 + 8 -> ss; ecx
+-> esp; edx -> eip
+<br>The registers ecx and edx must contain esp and eip and thus are not
+free for use.
+<p>The kernel esp (MSR_0x175) must be updated on every thread switch.
+<br>Jochen proposes to store the return address on the user's stack and
+to keep the user's esp in ecx.</blockquote>
+
+<h2>
+
+<hr WIDTH="100%">2000-01-16</h2>
+
+<h4>
+An IPC with timeout NEVER returns with error code 0x20 (timeout) (u)</h4>
+
+<blockquote>Problem: This happened due to not dequeueing threads from the
+wakeup queue. We relied on the scheduler to dequeue threads from the wakeup
+queue. But this holds only, if the timeout becomes active. In case of an
+IPC happening before the timeout expiry, the thread remained in the wakeup
+queue.
+<br>Scenario: L4/Linux' bottom half thread does IPCs with timeout and with
+timeout NEVER. If an IPC with a timeout succeeded before the timeout became
+active, the thread remained in the wakeup queue. Later on, when the thread
+did an IPC with timeout NEVER, the scheduler found the thread in the wakeup
+queue with an expired timeout and activated the thread. The thread then
+concluded, that it woke up due to a timeout and returned with an error
+code indicating a receive timeout (0x20).
+<br>Solution: put calls to thread_dequeue_wakeup wherever they're required</blockquote>
+
+<h4>
+L4/Linux enter_kdebugs "wrong access" after some l4_thread_ex_regs from
+the signal thread (u)</h4>
+
+<blockquote>Scenario: The signal thread changes the thread's IP to an endless
+loop in the emulib. Then it installes a faked exception 20 and kicks the
+thread to the exception handler ... which then returns to the thread.
+<br>Problem: Sometimes the worker thread is in a pagefault IPC. L4/KA does
+an unwind_ipc by kicking the thread back to user land, but with trashed
+registers, but the worker thread doesn't know that its registers were trashed.
+<br>Solution: unwind_ipc must not unwind the IPC by placing the thread
+in userland. It must abort only the IPC operation (i.e., return to the
+place where do_pagefault_ipc was called), which means that we have to save
+more state information. :-(
+<p>Would it be enough to save the last_ipc_ksp to the TCB and restore that
+on an aborted IPC (if it was valid)?
+<br>Late night note: Yes it is. Currently, a return-to-able stack frame
+is created in do_pagefault_ipc and its location is stored in the TCB (unwind_ipc_sp).</blockquote>
+
+<h2>
+
+<hr WIDTH="100%">2000-04-12</h2>
+
+<h4>
+l4_thread_schedule doesn't work in RMGR</h4>
+
+<blockquote>sbd. cut the RMGR local c-binding for l4_thread_schedule short
+<br>Having more than <b>one</b> set of syscall bindings is not really healthy!!!</blockquote>
+
+<h2>
+
+<hr WIDTH="100%">2000-04-11</h2>
+
+<h4>
+L4/Linux spuriously enter_kdebugs "bh error"</h4>
+
+<blockquote>Still looking for the reason of wait(..., IPC_NEVER) returning
+with timeout</blockquote>
+
+<h2>
+
+<hr WIDTH="100%">2000-04-10</h2>
+
+<h4>
+L4/Linux sometimes enter_kdebugs "wrong stack" when processes are killed</h4>
+
+<blockquote>Scenario: An L4/Linux task is hit by a signal -> its signal
+thread receives a message from the L4/Linux kernel. Then it does an lthread_ex_regs
+on its worker thread (which might be in a pagefault (effectively in an
+IPC which has to be aborted)).
+<br>In unwind_ipc we called thread_dequeue_send(tcb,tcb) with exchanged
+arguments. This led to a kernel pagefault by dereferencing a NULL pointer
+(Maybe, we should add a check for that?), which was turned into an IPC
+to the corresponding pager -> the L4/Linux kernel. To the L4/Linux kernel
+this IPC looked like a syscall, but the signal thread must not do Linux
+syscalls. Finally, the thread_id of the signal thread didn't match the
+thread_id of the worker thread (stored in L4/Linux' TSS structure) -> L4/Linux
+complains about the signal thread using the wrong stack (although there
+is not even a proper stack for that thread anyway :-)</blockquote>
+
+<h2>
+
+<hr WIDTH="100%">2000-01-xx</h2>
+
+<h4>
+???</h4>
+
+<blockquote>...</blockquote>
+
+<h2>
+
+<hr WIDTH="100%">2000-01-18</h2>
+
+<h4>
+total silence after thread switch</h4>
+
+<blockquote>switching from one thread to another can happen in two ways:
+<p>- switch inside the same address space
+<br>- switch to a different address space
+<p>later is the more interesting and complicated case.
+<br>Following situation:
+<p>Thread A, address space 1 switches to Thread B, address space 2
+<p>assume that the tcb of thread A is not mapped in address space 2. Thus,
+a
+<br>switch to AS2 *BEFORE* the stack is switched to thread B will cause
+a
+<br>pagefault on the stack of thread A (since it is not mapped in AS 2).
+But the
+<br>pagefault handler usually operates on the stack. Therefore, the system
+hangs
+<br>in an infinite pagefault loop.
+<p>Solution:
+<br>To switch from one address space to another, stacks must be switched
+BEFORE
+<br>the address space is switched. If a pagefault is raised in the destination
+<br>AS on the source tcb, we already have a valid stack and can handle
+the
+<br>fault.
+<br>(v)</blockquote>
+
+<h4>
+crazy unpredictable behavior when changing small sections in the code (x86)</h4>
+
+<blockquote>probably, GRUB used the memory where the x86-kernel was loaded
+for its own purpose, after the image was loaded
+<br>short term solution: relocate .init section
+<br>long term solution: sign your code and check signature before execution</blockquote>
+
+<h2>
+
+<hr WIDTH="100%">2000-01-17</h2>
+
+<h4>
+???</h4>
+
+<blockquote>...</blockquote>
+
+<h2>
+
+<hr WIDTH="100%">2000-01-14</h2>
+
+<h4>
+???</h4>
+
+<blockquote>...</blockquote>
+
+<h2>
+
+<hr WIDTH="100%">2000-01-13</h2>
+
+<h4>
+TCB layout (v)</h4>
+
+<blockquote>Fixed stack size removed</blockquote>
+
+<h2>
+
+<hr WIDTH="100%">2000-01-12</h2>
+
+<h4>
+IPC (v)</h4>
+
+<h4>
+Scheduler fixed (v)</h4>
+
+<h4>
+Flush TLB + Cache (u)</h4>
+
+<h4>
+ARM Mode switching, used wrong SP (u)</h4>
+
+<h4>
+Code moved to another section doesn't work any more, but did fine before</h4>
+
+<blockquote>First, even symbols from section <tt>.kdebug</tt> were placed
+in the <tt>.text</tt> section during the link process.
+<br>When I create a separate <tt>.kdebug</tt> section directly behind the
+<tt>.text</tt>
+section, the virtual address of that section is <tt>end(.kdebug)</tt>,
+as expected.
+<br>I forgot to set the load address of that section, thus is was loaded
+somewhere but not even near the <tt>.text</tt> section. (u)</blockquote>
+
+<hr WIDTH="100%">
+<h2>
+2000-01-11</h2>
+
+<h4>
+???</h4>
+
+<blockquote>...</blockquote>
+
+<h2>
+
+<hr WIDTH="100%">2000-01-10</h2>
+
+<h4>
+Cannot raise any exception at all on ARM</h4>
+
+<blockquote>To raise an exception the exception vector must be mapped in
+the current pagetable. Otherwise, the machine simply locks up. (u)</blockquote>
+
+<h4>
+Unplausible values</h4>
+
+<blockquote>When stealing code, always rererererecheck the semantics of
+type names!!!
+<br><tt>word_t(source system) != word_t(dest system)</tt>
+<br>(u)</blockquote>
+
+<h2>
+
+<hr WIDTH="100%"></h2>
+
+<h2>
+2000-01-09</h2>
+
+<h4>
+Make compatibility</h4>
+
+<blockquote>It appears, that make 3.78.1 works better than 3.77... The
+older version seemed unable to include the Makeconf file, probably caused
+by a parsing error. Things broke when I started using $(error ... ), I
+guess. (u)</blockquote>
+
+<h4>
+When cpp goes crazy</h4>
+
+<blockquote>like
+<br><b><tt>#define blah(x) \</tt></b>
+<br><b><tt>{ \</tt></b>
+<br><b><tt>&nbsp; foo; \</tt></b>
+<br><b><tt>} \</tt></b>
+<br>being preprocessed as
+<br><b><tt>{</tt></b>
+<br><b><tt>&nbsp; foo;</tt></b>
+<br><b><tt>}</tt></b>
+<br>you might suffer from DOSified files. Emacs not showing <b><tt>^M</tt></b>
+doesn't tell you anything.
+<br>Using cvs under NT with a working directory on a samba share and the
+repository accessed via rsh does unix2dos and dos2unix translations when
+checking in/out. Files in working directory contain <b><tt>^M</tt></b>.
+(u)</blockquote>
+
+<h4>
+x86-Pagetables</h4>
+
+<blockquote>usermode pagedir entries must have the usermode bit set. (v)</blockquote>
+
+<h4>
+VMWare - accessing nonexistent phys mem -> pgfault</h4>
+
+<blockquote>VMWare does not cleanly emulate pagetable entries to non-existing
+memory. Instead of delivering "undefined" data VMWare raises a pagefault.
+(v)</blockquote>
+
+<h4>
+VMWare uses parts of the virtual mem</h4>
+
+<blockquote>VMWare does not allow full usage of memory beyond 0xFFFF0000.
+VMWare stops with errors like "muli not emulated". It seems that memory
+used above that point cannot hold stuff like gdt and idt. (v)</blockquote>
+
+<h4>
+TODO</h4>
+
+<ul>
+<li>
+arch/config.h contains KERNEL_PHYS. This should go into the linker scripts.
+(u)</li>
+
+<li>
+keep in mind: Could we make use of architecturally private TCB members?
+(u)</li>
+</ul>
+
+<hr WIDTH="100%">
+<br>&nbsp;
+</body>
+</html>

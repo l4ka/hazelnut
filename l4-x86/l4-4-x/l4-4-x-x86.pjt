@@ -1,0 +1,137 @@
+;Codewright Project File (do not remove or modify this line)
+[ProjInit]
+ProjSetConfigFlags=0x00010140
+ProjCheckPath='C:\LIEDTKE\l4-4-x\\'
+
+[Files]
+
+[State]
+SysSetCwd='C:\LIEDTKE\l4-4-x\make'
+SrchSetFlags=0x0519604a
+FileSortMode=0x0
+_StateHistory=FILELIST,'C:\LIEDTKE\l4-x\x86\kdebug.lst','C:\LIEDTKE\l4-4-x\make\make-l4','C:\LIEDTKE\l4-4-x\make\ml-x86.bat','C:\LIEDTKE\l4-4-x\kernifc\L4pre.inc','C:\LIEDTKE\l4-4-x\kernel\adrsman.asm','C:\LIEDTKE\l4-4-x\kernel\ipcman.asm','C:\LIEDTKE\l4-4-x\kernifc\Intrifc.inc','C:\LIEDTKE\l4-4-x\x86\ipcman.lst','C:\LIEDTKE\l4-4-x\kernel\kernel.asm'
+_StateHistory=SEARCH,'page_fault_handler','ipc_handler','remote_kd_intr','reset_rtc_timer_intr','apic','init_apic','reset','com','show_p','l4-x'
+_StateHistory=REPLACE,' ','SU','pre_paging','l4.exe','$(a)','l4-x','l4','ml-x86','x86','l4-4-x'
+_StateHistory=XSYMBOL,'__L4_TYPES_H__','L4_NIL_ID','L4_LOG2_SUPERPAGESIZE','LnInvalidThread','LId_FirstInterrupt','LId_Equal','ToLId','FromLId','SCRATCH_MEMORY'
+_StateHistory=EDITFILE,'C:\LIEDTKE\ln-x\make\xml-pent.bat','C:\LIEDTKE\ln-x\make\make-ln','C:\LIEDTKE\ln-x\pent\ln.rsp','C:\LIEDTKE\ln-x\make\xml-pent.bat','C:\LIEDTKE\ln-x\make\make-l4','C:\LIEDTKE\ln-x\x86\l4.rsp','C:\LIEDTKE\l4-x\make\make-l4','C:\LIEDTKE\l4-x\make\ml-x86.bat','C:\LIEDTKE\l4-x\make\make-l4','C:\LIEDTKE\l4-4-x\make\ml-x86.bat'
+_StateHistory=DIRECTORY,'C:\ln-21\src','C:\ln-x\src','C:\home\LIEDTKE\ln-x\make','C:\home\LIEDTKE\ln-x\src','C:\LIEDTKE\ln-x\kernel','C:\LIEDTKE\l4-x\make','C:\LIEDTKE\l4-x\kernifc','C:\LIEDTKE\l4-x\userifc','C:\LIEDTKE\l4-x','C:\LIEDTKE\l4-x\kernel'
+_StateHistory=OUTNAME,'nick'
+_StateHistory=DOSHISTORY,'x','exit'
+_StateHistory=DIFFFILE,'C:\LIEDTKE\l4-x\kernel\kdebug.asm','C:\LIEDTKE\l4-x\kernel\sgmctr.asm','C:\LIEDTKE\l4-x\kernel\start.asm','C:\LIEDTKE\l4-x\kernel\tcbman.asm','C:\LIEDTKE\l4-x\kernel\intctr.asm','C:\LIEDTKE\l4-y\kernel\kdebug.asm'
+_StateHistory=DIFFTARGET,'C:\LIEDTKE\l4-y\kernel\kdebug.asm','C:\LIEDTKE\l4-y\kernel\sgmctr.asm','C:\LIEDTKE\l4-y\kernel\start.asm','C:\LIEDTKE\l4-y\kernel\tcbman.asm','C:\LIEDTKE\l4-y\kernel\intctr.asm','C:\LIEDTKE\l4-x\kernel\kdebug.asm'
+ProjLoadWorkspace='std',1
+
+[Editor]
+_RestoreSysFlags=0x63097fc8, 0xfffffffc, 0
+ClipboardSetTermStr='\r\n',0
+ClipboardEnableTermStr=1
+ClipboardSetSepStr='\r\n',0
+ClipboardEnableSepStr=1
+ScrapSetCount=1
+VCSProject=''
+VCSProjectPath=''
+VCSProjectLocalPath=''
+
+[Compiler]
+TagSetCmd='${HOME}${WTAGS} -oc -d -t${TAGFILE}.tag -p${TAGFILE}.ptg',0x8000060
+BrowseSetFile='C:\l4-4-x\l4-4-x.ptg'
+TagSetFile='C:\l4-4-x\l4-4-x.tag'
+CompilerAddCmd='Microsoft Assembler','',1073741840,'',16,'',16,'',16,'',0,'',0,'','','','',''
+CompilerAddResponse='Microsoft Assembler',
+CompilerAddCmd='Default Compiler Settings','ml %r',1073741840,'',16,'',16,'',16,'',0,'',0,'','','','',''
+CompilerAddResponse='Default Compiler Settings',
+CompilerAddCmd='masm5','ml-pex2 %r %e %Q',1073741840,'',16,'',16,'',16,'',0,'',0,'','','','',''
+CompilerAddResponse='masm5',
+CompilerAddCmd='LaTeX','texv %r',1073741840,'',16,'',16,'',16,'',0,'',0,'','','','',''
+CompilerAddResponse='LaTeX',
+CompilerAddCmd='masm','ml-pex2 %r %e %Q',1073741840,'',16,'',16,'',16,'',0,'',0,'','','','',''
+CompilerAddResponse='masm',
+CompilerAddCmd='$_cw_proj_hash_$','',1073741904,'',80,'${FTEE} nmaker /F %v\liedtke\l4-4-x\make\make-l4 /B %v\liedtke\l4-4-x\x86\l4.exe',176,'${FTEE} nmake',176,'',0,'',0,'_ErrorInfoDefault','','','proj.err','C:\LIEDTKE\l4-4-x\make'
+CompilerAddResponse='$_cw_proj_hash_$',
+CompilerAddCmd='Microsoft C(NT-i386)','${FTEE} cl -DSTRICT -c -W3 -G3 -D_X86_=1 -DWIN32 %r%e',1073741936,'${FTEE} cl -DSTRICT -c -W3 -G3 -D_X86_=1 -DWIN32 %r%e',112,'',144,'',144,'',0,'',0,'_MicrosoftErrorInfo','','','',''
+CompilerAddResponse='Microsoft C(NT-i386)',
+CompilerNewExt=.htm
+CompilerAssign='Microsoft C(NT-i386)','.c'
+CompilerAssign='LaTeX','.psc'
+CompilerNewExt=.pas
+CompilerAssign='Microsoft C(NT-i386)','.h'
+CompilerNewExt=.lst
+CompilerAssign='masm','.inc'
+CompilerNewExt=.ini
+CompilerNewExt=.html
+CompilerAssign='Microsoft C(NT-i386)','.cpp'
+CompilerAssign='Default Compiler Settings','.*'
+CompilerAssign='Microsoft C(NT-i386)','.cxx'
+CompilerNewExt=.txt
+CompilerAssign='masm','.asm'
+CompilerAssign='Microsoft C(NT-i386)','.hpp'
+CompilerAssign='LaTeX','.tex'
+CompilerAssign='masm','.as5'
+
+[Extension.inc]
+ExtSetBorderElements='.inc','/*','-','**','**','**','**','-','*/','/*','*/',1
+BufSetBackupSpec=''
+BufSetTabStr='5 9'
+BufSetMarginColumns=1,72
+BufSetAutoIndentMode=0x0000
+BufSetMaxTabCol=0x00c8
+BufSetMaxVirtualLines=0x0019
+ExtSetBufFlags=0x8800048e,0x301cff
+ExtSetTemplateMacro=2,'@'
+ExtSetTemplateMacro=1,'\t'
+ExtSetTemplateMacro=0,'\n'
+ExtSetStyle=.inc,1
+
+[Extension]
+ExtColorsAssoc='.asm',1
+ExtSetDelimiters=.asm,^A-Za-z0-9_
+ExtColorsAssoc='.h',1
+ExtSetDelimiters=.h,^A-Za-z0-9_
+ExtColorsAssoc='.cpp',1
+ExtSetDelimiters=.cpp,^A-Za-z0-9_
+ExtColorsAssoc='.htm',1
+ExtSetDelimiters=.htm,^A-Za-z0-9_
+ExtColorsAssoc='.html',1
+ExtSetDelimiters=.html,^A-Za-z0-9_
+ExtColorsAssoc='.lst',1
+ExtSetDelimiters=.lst,^A-Za-z0-9_
+ExtColorsAssoc='.c',1
+ExtSetDelimiters=.c,^A-Za-z0-9_
+ExtColorsAssoc='.txt',1
+ExtSetDelimiters=.txt,^A-Za-z0-9_
+ExtColorsAssoc='.pas',1
+ExtSetDelimiters=.pas,^A-Za-z0-9_
+ExtColorsAssoc='.ini',1
+ExtSetDelimiters=.ini,^A-Za-z0-9_
+ExtColorsAssoc='.inc',1
+ExtSetDelimiters=.inc,^A-Za-z0-9_
+ExtColorsAssoc='.*',1
+ExtSetDelimiters=.*,^A-Za-z0-9_
+ExtColorsAssoc='.as5',1
+ExtSetDelimiters=.as5,^A-Za-z0-9_
+ExtAlias=.htm,.html
+ExtAlias=.jav,.java
+ExtAlias=.as5,.asm
+
+
+[Extension.asm]
+ExtSetBorderElements='.asm',';','-',';',';',';',';','-',';',';','',1
+BufSetBackupSpec=''
+BufSetTabStr='5 9'
+BufSetMarginColumns=1,72
+BufSetAutoIndentMode=0x0000
+BufSetMaxTabCol=0x00c8
+BufSetMaxVirtualLines=0x0019
+ExtSetBufFlags=0x8800048e,0x301cff
+ExtSetTemplateMacro=2,'@'
+ExtSetTemplateMacro=1,'\t'
+ExtSetTemplateMacro=0,'\n'
+ExtSetStyle=.asm,1
+[Workspace.std]
+StateWindowFrame=330,20,620,455,0x63097fc8
+
+[Project]
+ConfigSetLinkDBFilename='C:\CW32\cwright.ldb'
+ConfigSetMarkDBFilename='C:\CW32\cwright.mrk'
+ConfigSetSymbolDBFilename='C:\CW32\cwright.sbl'
+EditSetPath=''

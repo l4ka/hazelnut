@@ -1,0 +1,3 @@
+ide-driver ide-driver.stripped
+.depend
+*.o *.ii *.i *.s

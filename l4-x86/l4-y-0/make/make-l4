@@ -1,0 +1,114 @@
+
+p={\liedtke\l4-y\kernel\;\liedtke\l4-y\kernifc\;\liedtke\l4-y\userifc\}
+a=d:\liedtke\l4-y\PIII^\
+all_includes_PIII= $(p)l4pre.inc $(p)l4const.inc $(p)l4kd.inc $(p)adrspace.inc $(p)adrspac5.inc $(p)tcb.inc $(p)cpucb.inc $(p)cpucb5.inc $(p)intrifc.inc $(p)pagcb.inc $(p)pagconst.inc $(p)pagmac.inc $(p)pnodes.inc $(p)schedcb.inc $(p)schedcb2.inc $(p)lbmac.inc $(p)syscalls.inc $(p)uid.inc $(p)kpage.inc $(p)msg.inc $(p)SCmac.inc $(p)apic.inc
+
+
+ 
+
+$(a)adrsman.obj : $(all_includes_PIII) $(p)adrsman.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII adrsman asm
+  
+$(a)cpuctr.obj : $(all_includes_PIII) $(p)cpuctr.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII cpuctr asm
+  
+$(a)dispatch.obj : $(all_includes_PIII) $(p)dispatch.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII dispatch asm
+ 
+$(a)emuctr.obj : $(all_includes_PIII) $(p)emuctr.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII emuctr asm
+ 
+$(a)intctr.obj : $(all_includes_PIII) $(p)intctr.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII intctr asm
+ 
+$(a)ipcman.obj : $(all_includes_PIII) $(p)ipcman.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII ipcman asm
+ 
+$(a)kdebug.obj : $(all_includes_PIII) $(p)kdebug.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII kdebug asm           
+ 
+$(a)kdiopc.obj : $(all_includes_PIII) $(p)kdiopc.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII kdiopc asm
+ 
+$(a)kernel.obj : $(p)kernel.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII kernel asm
+ 
+$(a)ktest.obj : $(all_includes_PIII) $(p)ktest.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII ktest asm
+ 
+$(a)memctr.obj : $(all_includes_PIII) $(p)memctr.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII memctr asm
+ 
+$(a)pagctr.obj : $(all_includes_PIII) $(p)pagctr.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII pagctr asm
+  
+$(a)pagfault.obj : $(all_includes_PIII) $(p)pagfault.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII pagfault asm
+ 
+$(a)pagmap.obj : $(all_includes_PIII) $(p)pagmap.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII pagmap asm
+ 
+$(a)sgmctr.obj : $(all_includes_PIII) $(p)sgmctr.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII sgmctr asm
+ 
+$(a)sigma0.obj : $(all_includes_PIII) $(p)sigma0.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII sigma0 asm
+ 
+$(a)start.obj : $(all_includes_PIII) $(p)start.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII start asm
+ 
+$(a)startpc.obj : $(all_includes_PIII) $(p)startpc.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII startpc asm
+ 
+$(a)tcbman.obj : $(all_includes_PIII) $(p)tcbman.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII tcbman asm 
+ 
+$(a)yoonseva.obj : $(all_includes_PIII) $(p)yoonseva.asm
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII yoonseva asm 
+  
+$(a)l4.exe : $(a)adrsman.obj $(a)cpuctr.obj $(a)dispatch.obj $(a)emuctr.obj
+$(a)l4.exe : $(a)intctr.obj $(a)ipcman.obj $(a)kdebug.obj $(a)kdiopc.obj
+$(a)l4.exe : $(a)kernel.obj $(a)ktest.obj $(a)memctr.obj $(a)pagctr.obj
+$(a)l4.exe : $(a)pagfault.obj $(a)pagmap.obj $(a)sgmctr.obj $(a)sigma0.obj
+$(a)l4.exe : $(a)start.obj $(a)startpc.obj $(a)tcbman.obj
+$(a)l4.exe : $(a)yoonseva.obj
+$(a)l4.exe : $(a)boot.obj
+ @cd \liedtke\l4-y\PIII
+ @link /nologo @..\make\l4.rsp
+ pause
+ 
+
+
+$(a)boot.obj : $(all_includes_PIII) $(p)boot.asm  
+  @cd \liedtke\l4-y\PIII
+  @..\make\ml-PIII boot asm 
+
+$(a)boot.com : $(a)boot.obj
+ @cd \liedtke\l4-y\PIII
+ link boot.obj/TINY,boot,boot.map
+
+ 
+
+
+
+ 

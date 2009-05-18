@@ -1,0 +1,11 @@
+
+Microsoft (R) Program Maintenance Utility   Version 1.20
+Copyright (c) Microsoft Corp 1988-92. All rights reserved.
+
+ Assembling: ..\kernel\kdebug.asm
+Object Modules [.obj]: /nologo kernel startpc  start   cpuctr  ipcman dispatch intctr tcbman memctr sgmctr+
+Object Modules [.obj]: pagctr pagfault pagmap adrsman emuctr  yoonseva kdiopc kdebug sigma0 ktest,l4.exe,l4.map;
+LINK : warning L4021: no stack segment
+	pause
+Press any key to continue . . .
+

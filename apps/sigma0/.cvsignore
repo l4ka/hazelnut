@@ -1,0 +1,4 @@
+sigma0 sigma0.stripped
+.depend
+*.o *.ii *.i *.s
+kip.h

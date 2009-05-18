@@ -1,0 +1,47 @@
+mainmenu_option next_comment
+comment 'Architecture'
+
+if [ "1" != "0" ] then;
+  define_bool _CONFIG_ARCH y
+fi
+
+choice 'Major CPU Architecture'		\
+       "arm	CONFIG_ARCH_ARM		\
+	x86	CONFIG_ARCH_X86		\
+	mips	CONFIG_ARCH_MIPS	\
+	superh	CONFIG_ARCH_SH		\
+	m68k	CONFIG_ARCH_M68K"	arm $_CONFIG_ARCH
+
+if [ "$CONFIG_ARCH_ARM" = "y" ]; then
+  choice 'ARM Board Type' \
+       "DNARD	CONFIG_ARCH_ARM_DNARD	\
+	Brutus	CONFIG_ARCH_ARM_BRUTUS	\
+	PLEB	CONFIG_ARCH_ARM_PLEB	\
+	IPaq	CONFIG_ARCH_ARM_IPAQ	\
+	EP7211	CONFIG_ARCH_ARM_EP7211" DNARD $CONFIG_ARCH_ARM
+fi
+
+if [ "$CONFIG_ARCH_X86" = "y" ]; then
+  choice 'x86 Model' \
+       "i586	CONFIG_ARCH_X86_I586" i586 $CONFIG_ARCH_X86
+fi
+
+if [ "$CONFIG_ARCH_MIPS" = "y" ]; then
+  choice 'MIPS CPU Model' \
+	"R4000		CONFIG_ARCH_MIPS_R4000" R4000 $CONFIG_ARCH_MIPS
+fi
+
+if [ "$CONFIG_ARCH_SH" = "y" ]; then
+  choice 'SuperH Model' \
+       "Emulator	CONFIG_ARCH_SH_EMU	\
+	SH3		CONFIG_ARCH_SH_SH3	\
+	SH4		CONFIG_ARCH_SH_SH4" SH3 $CONFIG_ARCH_SH
+fi
+
+
+if [ "$CONFIG_ARCH_M68K" = "y" ]; then
+  choice 'm68k CPU Model' \
+       "Dragonball	CONFIG_ARCH_M68K_DRAGONBALL" Dragonball $CONFIG_ARCH_M68K
+fi
+
+

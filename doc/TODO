@@ -1,0 +1,16 @@
+* kernel memory layout
+* sigma0 memory layout
+* kernel frame allocator
+* wake-up queue[s] ???
+* thread state ???
+
+
+
+
+
+
+
+
+
+######################################################################
+arch/config.h contains KERNEL_PHYS ---> this should go into the linker scripts

@@ -1,0 +1,78 @@
+######################################################################
+##                
+## Copyright (C) 2001,  Karlsruhe University
+##                
+## File path:     Makefile.voodoo
+## Description:   Makefile to hide load of very ugly magic.
+##                
+## @LICENSE@
+##                
+## $Id: Makefile.voodoo,v 1.10 2001/11/22 15:45:51 skoglund Exp $
+##                
+######################################################################
+
+# create a random filename
+TCBLAYOUTTMP:=./_$(shell date +%s)_123
+
+# rebuild include/tcb_layout.h if needed
+include/tcb_layout.h:	include/tcb.h include/$(ARCH)/tcb.h Makefile.voodoo
+	@echo Generating $@
+	@#
+	@# create dummy tcb_layout.h
+	@rm -f $@
+	@touch $@
+	@#
+	@# create offsets in C
+	@printf							 '\
+#include <universe.h>						\n\
+								\n\
+tcb_t tcb;							\n\
+								\n\
+#define O(x) (dword_t)((char*) &tcb.x - (char*)(&tcb))		\n\
+								\n\
+dword_t offsets[] __attribute__ ((section(".offsets"))) =		\n\
+{								\n' > $(TCBLAYOUTTMP).c
+	@( cat include/config.h; cat include/tcb.h | awk 'BEGIN{printme=0} /TCB_END_MARKER/ { printme = 0} { if (printme == 1 ) { print  } } /TCB_START_MARKER/ {printme = 1 } ' ) | cpp $(CPPFLAGS) -P | tr '*[;' '   ' | sed -e 's/[ \t\\]*/ /' | awk -F' ' '{print $$2}' | grep -v '^$$' | awk '{ print "   O("$$1")," } ' >> $(TCBLAYOUTTMP).c
+	@printf '\n};\n' >> $(TCBLAYOUTTMP).c
+	@#
+	@# build offsets with cross compiler
+	@$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $(TCBLAYOUTTMP).o $(TCBLAYOUTTMP).c
+	@# extract offsets into bin
+	@$(OBJCOPY) -j .offsets -Obinary $(TCBLAYOUTTMP).o $(TCBLAYOUTTMP).bin
+	@#
+	@#
+	@#
+	@# create dumper
+	@printf							 '\
+								\n\
+#include <stdio.h>						\n\
+#include <ctype.h>						\n\
+int offsets[] = {						\n' > $(TCBLAYOUTTMP)-dump.c
+	@hexdump -v -e '"0x%x, "' $(TCBLAYOUTTMP).bin >> $(TCBLAYOUTTMP)-dump.c
+	@printf '};						\n\
+								\n\
+char* ucase(char* s)						\n\
+{								\n\
+  for (char*t=s;*t;t++)						\n\
+    *t = toupper(*t);						\n\
+  return s;							\n\
+}								\n\
+								\n\
+#define D(x)	printf("#define OFS_TCB_%%-30s0x%%02x\t/* %%3d */\\n", ucase(#x), offsets[idx], offsets[idx]); idx++;	\n\
+								\n\
+int idx = 0;							\n\
+int main(void)							\n\
+{								\n' >> $(TCBLAYOUTTMP)-dump.c
+	@( cat include/config.h; cat include/tcb.h | awk 'BEGIN{printme=0} /TCB_END_MARKER/ { printme = 0} { if (printme == 1 ) { print  } } /TCB_START_MARKER/ {printme = 1 } ' ) | cpp $(CPPFLAGS) -P | tr '*[;' '   ' | sed -e 's/[ \t\\]*/ /' | awk -F' ' '{print $$2}' | grep -v '^$$' | awk '{ print "   D("$$1");" } ' >> $(TCBLAYOUTTMP)-dump.c
+	@printf '\n};\n' >> $(TCBLAYOUTTMP)-dump.c
+	@#
+	@# build dumper
+	@gcc -N -ggdb -x c++ -o $(TCBLAYOUTTMP)-dump $(TCBLAYOUTTMP)-dump.c
+	@# run dumper
+	@printf '/* machine-generated file - do NOT edit */\n'	>  $@
+	@printf '#ifndef __TCB_LAYOUT__H__\n'			>> $@
+	@printf '#define __TCB_LAYOUT__H__\n\n'			>> $@
+	@$(TCBLAYOUTTMP)-dump >> $@
+	@printf '\n#endif /* __TCB_LAYOUT__H__ */\n'		>> $@
+	@$(RM) $(TCBLAYOUTTMP)*
+

@@ -1,0 +1,34 @@
+
+Contents of src\kernifc:
+
+  LN-internal Include Files
+
+  Convention: A name "x" refers to file "x.inc" and is used for all LNs (486, Pentium).
+              A name "x,4/5" means that there is a file "x.inc" that is included in source files and
+              includes either "x4.inc" (for LN/486) or "x5.inc" for LN/Pentium.
+  
+
+adrspace,4/5   Address-Space            Description
+apic           APIC Description
+cpucb,4/5      CPU-Control-Block        Description + Macros
+intrifc        Interrupt/Trap/Fault     Description + Macros
+kpage          Kernel Page              Description
+lbmac          PC clock access          Macros
+pagcb          Page Map Control Block   Description
+pagconst       Paging Constants
+pagmac         Paging Macros            Macros
+pnodes         Page Map Node            Description
+schedcb        Scheduler Control Block  Description + Macros
+schedcb2       ditto                    Description
+small-as       small spaces support     Macros
+tcb            thread control block     Description + Macros
+
+lnpre          prelude for any module, contains Dijkstra Macros
+lnconst        prelude for any module, constants
+
+lnkd           kdebug interface         Macros
+perform        Pentium Performance Counters
+
+
+
+Only the mentioned files and this file of src\kernifc are supported.
